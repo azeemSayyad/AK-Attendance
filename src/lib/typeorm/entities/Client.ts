@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from "typeorm";
-import { WorkAssignment } from "./WorkAssignment";
-import { MoneyTaken } from "./MoneyTaken";
+import type { WorkAssignment } from "./WorkAssignment";
+import type { MoneyTaken } from "./MoneyTaken";
 
 @Entity("clients")
 export class Client {
@@ -19,9 +19,9 @@ export class Client {
     @UpdateDateColumn({ name: "updated_at" })
     updatedAt!: Date;
 
-    @OneToMany(() => WorkAssignment, (workAssignment) => workAssignment.client)
+    @OneToMany(() => require("./WorkAssignment").WorkAssignment, (workAssignment: WorkAssignment) => workAssignment.client)
     workAssignments!: WorkAssignment[];
 
-    @OneToMany(() => MoneyTaken, (moneyTaken) => moneyTaken.client)
+    @OneToMany(() => require("./MoneyTaken").MoneyTaken, (moneyTaken: MoneyTaken) => moneyTaken.client)
     moneyTaken!: MoneyTaken[];
 }
