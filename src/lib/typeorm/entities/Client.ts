@@ -1,6 +1,4 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany } from "typeorm";
-import type { WorkAssignment } from "./WorkAssignment";
-import type { MoneyTaken } from "./MoneyTaken";
 
 @Entity("clients")
 export class Client {
@@ -20,8 +18,8 @@ export class Client {
     updatedAt!: Date;
 
     @OneToMany("WorkAssignment", "client")
-    workAssignments!: WorkAssignment[];
+    workAssignments!: any[];
 
     @OneToMany("MoneyTaken", "client")
-    moneyTaken!: MoneyTaken[];
+    moneyTaken!: any[];
 }

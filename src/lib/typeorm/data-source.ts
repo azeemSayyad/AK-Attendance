@@ -1,9 +1,9 @@
 import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { Employee } from "./entities/Employee";
+import { Client } from "./entities/Client";
 import { Attendance } from "./entities/Attendance";
 import { Advance } from "./entities/Advance";
-import { Client } from "./entities/Client";
 import { WorkAssignment } from "./entities/WorkAssignment";
 import { MoneyTaken } from "./entities/MoneyTaken";
 import { MonthlyAdvance } from "./entities/MonthlyAdvance";
