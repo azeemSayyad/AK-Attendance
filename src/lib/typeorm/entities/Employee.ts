@@ -1,4 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToMany } from "typeorm";
+import { Attendance } from "./Attendance";
+import { Advance } from "./Advance";
 
 @Entity("employees")
 export class Employee {
@@ -26,9 +28,9 @@ export class Employee {
     @CreateDateColumn({ name: "created_at" })
     createdAt!: Date;
 
-    @OneToMany("Attendance", "employee")
-    attendances!: any[];
+    @OneToMany(() => Attendance, (attendance) => attendance.employee)
+    attendances!: Attendance[];
 
-    @OneToMany("Advance", "employee")
-    advances!: any[];
+    @OneToMany(() => Advance, (advance) => advance.employee)
+    advances!: Advance[];
 }
