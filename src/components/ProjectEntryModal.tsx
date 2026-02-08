@@ -143,6 +143,8 @@ export default function ProjectEntryModal({
     const [newExpenseAmount, setNewExpenseAmount] = useState("");
     const [loading, setLoading] = useState(false);
     const [isWorkforceModalOpen, setIsWorkforceModalOpen] = useState(false);
+    const [showConfirmDeleteEntry, setShowConfirmDeleteEntry] = useState(false);
+    const [confirmExpenseIndex, setConfirmExpenseIndex] = useState<number | null>(null);
 
     // Sync state when props change, but with protection against infinite loops
     // We use JSON stringify because initialEmployees is a new array every time the parent re-renders
@@ -196,9 +198,12 @@ export default function ProjectEntryModal({
     };
 
     const handleDelete = async () => {
-        if (!confirm("Are you sure you want to delete this entire project entry? This will remove all workforce, expenses, and money records for this date.")) {
-            return;
-        }
+        // open confirm modal
+        setShowConfirmDeleteEntry(true);
+    };
+
+    const confirmDeleteEntry = async () => {
+        setShowConfirmDeleteEntry(false);
         setLoading(true);
         try {
             await deleteProjectEntry(clientId, date);
@@ -207,6 +212,7 @@ export default function ProjectEntryModal({
             if (onDelete) onDelete();
         } catch (err) {
             console.error(err);
+            // keep alert for error feedback
             alert("Failed to delete entry. Please try again.");
         } finally {
             setLoading(false);
@@ -223,12 +229,28 @@ export default function ProjectEntryModal({
     const removeExpense = async (index: number) => {
         const exp = expenses[index];
         if (exp.id) {
-            if (confirm("Delete this expense properly?")) {
-                await deleteProjectExpense(exp.id);
-                setExpenses(expenses.filter((_, i) => i !== index));
-            }
+            // open confirm modal for expense
+            setConfirmExpenseIndex(index);
         } else {
             setExpenses(expenses.filter((_, i) => i !== index));
+        }
+    };
+
+    const confirmDeleteExpense = async () => {
+        if (confirmExpenseIndex === null) return;
+        const idx = confirmExpenseIndex;
+        const exp = expenses[idx];
+        setConfirmExpenseIndex(null);
+        if (!exp || !exp.id) return;
+        setLoading(true);
+        try {
+            await deleteProjectExpense(exp.id);
+            setExpenses(prev => prev.filter((_, i) => i !== idx));
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete expense. Please try again.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -437,6 +459,40 @@ export default function ProjectEntryModal({
                 selectedIds={selectedEmps}
                 onSelect={setSelectedEmps}
             />
+
+            {/* Confirm Delete Entry Modal */}
+            <AnimatePresence>
+                {showConfirmDeleteEntry && (
+                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowConfirmDeleteEntry(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white w-full max-w-sm rounded-[1.2rem] shadow-2xl p-6">
+                            <h3 className="text-lg font-black text-slate-900">Delete Project Entry</h3>
+                            <p className="text-sm text-slate-500 mt-2">This will remove all workforce, expenses, and money records for <span className="font-bold">{date}</span>. This action cannot be undone.</p>
+                            <div className="mt-4 flex gap-3">
+                                <button onClick={() => setShowConfirmDeleteEntry(false)} className="flex-1 py-3 bg-white border border-slate-200 rounded-2xl font-bold">Cancel</button>
+                                <button onClick={confirmDeleteEntry} className="flex-1 py-3 bg-red-600 text-white rounded-2xl font-black">Delete</button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Confirm Delete Expense Modal */}
+            <AnimatePresence>
+                {confirmExpenseIndex !== null && (
+                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setConfirmExpenseIndex(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
+                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white w-full max-w-sm rounded-[1.2rem] shadow-2xl p-6">
+                            <h3 className="text-lg font-black text-slate-900">Delete Expense</h3>
+                            <p className="text-sm text-slate-500 mt-2">Are you sure you want to delete this expense? This action cannot be undone.</p>
+                            <div className="mt-4 flex gap-3">
+                                <button onClick={() => setConfirmExpenseIndex(null)} className="flex-1 py-3 bg-white border border-slate-200 rounded-2xl font-bold">Cancel</button>
+                                <button onClick={confirmDeleteExpense} className="flex-1 py-3 bg-red-600 text-white rounded-2xl font-black">Delete</button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </>
     );
 }

@@ -27,6 +27,11 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
     const [localAdvances, setLocalAdvances] = React.useState<Record<string, number>>({});
     const [localMonthlyAdvances, setLocalMonthlyAdvances] = React.useState<Record<string, number>>({});
 
+    // Refs mirror local state so we can read freshest values synchronously (avoid setState batching race)
+    const localAttendanceRef = React.useRef<Record<string, any>>(localAttendance);
+    const localAdvancesRef = React.useRef<Record<string, number>>(localAdvances);
+    const localMonthlyAdvancesRef = React.useRef<Record<string, number>>(localMonthlyAdvances);
+
     // Derived state to know if we have pending changes
     const hasPendingChanges = Object.keys(localAttendance).length > 0 || Object.keys(localAdvances).length > 0 || Object.keys(localMonthlyAdvances).length > 0;
 
@@ -50,9 +55,9 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
 
         try {
             // Convert local state maps to arrays needed by server action
-            const attendanceUpdates = Object.values(localAttendance);
+            const attendanceUpdates = Object.values(localAttendanceRef.current);
 
-            const advanceUpdates = Object.entries(localAdvances).map(([key, amount]) => {
+            const advanceUpdates = Object.entries(localAdvancesRef.current).map(([key, amount]) => {
                 // key is like "empId-dateStr" or "adv-empId-dateStr" - wait, we used simpler keys for advances?
                 // Let's check how we store them. 
                 // We will store them as `${empId}-${dateStr}` in localAdvances
@@ -61,23 +66,30 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
                 return { employeeId: parseInt(empIdStr), date: dateStr, amount };
             });
 
-            const monthlyAdvanceUpdates = Object.entries(localMonthlyAdvances).map(([key, amount]) => {
+            const monthlyAdvanceUpdates = Object.entries(localMonthlyAdvancesRef.current).map(([key, amount]) => {
                 // key is `monthly-${empId}`. But we need year/month which are capable of being derived from currentDate props
                 // actually, `monthly-empId` only supports current view. Correct.
                 const empId = parseInt(key.replace("monthly-", ""));
                 return { employeeId: empId, year: currentDate.getFullYear(), month: currentDate.getMonth(), amount };
             });
 
-            await saveBatchChanges({
+            const payload = {
                 attendance: attendanceUpdates,
                 advances: advanceUpdates,
                 monthlyAdvances: monthlyAdvanceUpdates
-            });
+            };
+            console.debug("saveAllChanges payload:", payload);
+
+            const res = await saveBatchChanges(payload as any);
+            console.debug("saveBatchChanges response:", res);
 
             // Clear local pending state on success
             setLocalAttendance({});
             setLocalAdvances({});
             setLocalMonthlyAdvances({});
+            localAttendanceRef.current = {};
+            localAdvancesRef.current = {};
+            localMonthlyAdvancesRef.current = {};
 
             // Trigger parent refresh
             onUpdate();
@@ -196,7 +208,11 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
         }
 
         const update = { employeeId: empId, date: dateStr, present: isPresent, multiplier: nextMultiplier };
-        setLocalAttendance(prev => ({ ...prev, [key]: update }));
+        setLocalAttendance(prev => {
+            const next = { ...prev, [key]: update };
+            localAttendanceRef.current = next;
+            return next;
+        });
         resetAutoSaveTimer();
     };
 
@@ -207,7 +223,12 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
         let val = amount === "" ? 0 : parseFloat(amount);
         if (val > 1000000) val = 1000000;
 
-        setLocalMonthlyAdvances(prev => ({ ...prev, [key]: val }));
+        console.debug("handleMonthlyAdvanceChange", { key, raw: amount, val });
+        setLocalMonthlyAdvances(prev => {
+            const next = { ...prev, [key]: val };
+            localMonthlyAdvancesRef.current = next;
+            return next;
+        });
         resetAutoSaveTimer();
     };
 
@@ -218,7 +239,12 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
         let val = amount === "" ? 0 : parseFloat(amount);
         if (val > 1000000) val = 1000000;
 
-        setLocalAdvances(prev => ({ ...prev, [key]: val }));
+        console.debug("handleAdvanceChange", { key, raw: amount, val });
+        setLocalAdvances(prev => {
+            const next = { ...prev, [key]: val };
+            localAdvancesRef.current = next;
+            return next;
+        });
         resetAutoSaveTimer();
     };
 

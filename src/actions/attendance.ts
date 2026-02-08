@@ -88,7 +88,16 @@ export async function saveBatchChanges(data: {
 }) {
     const ds = await getDataSource();
 
-    await ds.transaction(async (manager) => {
+    try {
+        // Log incoming payload for debugging
+        console.debug("saveBatchChanges received:", JSON.stringify(data));
+    } catch (e) {
+        console.error("Failed to stringify save payload", e);
+    }
+
+    try {
+        await ds.transaction(async (manager) => {
+            console.debug("Beginning DB transaction for saveBatchChanges");
         // 1. Process Attendance Updates
         for (const update of data.attendance) {
             const { employeeId, date, present, multiplier } = update;
@@ -131,7 +140,11 @@ export async function saveBatchChanges(data: {
                 await manager.save(newRecord);
             }
         }
-    });
+        });
+    } catch (err) {
+        console.error("Error in saveBatchChanges transaction:", err);
+        throw err;
+    }
 
     revalidatePath("/");
     return { success: true };

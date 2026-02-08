@@ -328,7 +328,14 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                         {role === "admin" && gridHasPending && (
                             <div className="mt-3 flex">
                                 <button
-                                    onClick={() => gridSaveFn && gridSaveFn()}
+                                    onClick={async () => {
+                                        console.debug("Dashboard Save clicked", { gridHasPending, hasFn: !!gridSaveFn });
+                                        try {
+                                            if (gridSaveFn) await gridSaveFn();
+                                        } catch (e) {
+                                            console.error("Error invoking grid save:", e);
+                                        }
+                                    }}
                                     disabled={gridIsSaving}
                                     className="flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-sm bg-gradient-to-r from-indigo-500 via-blue-600 to-purple-600 text-white shadow-lg hover:opacity-90 active:scale-95"
                                 >
@@ -411,7 +418,10 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                                             {clients.map(client => {
                                                 const clientAssignmentsList = clientAssignments.filter(a => a.clientId === client.id);
                                                 const clientMoneyList = clientMoney.filter(m => m.clientId === client.id);
-                                                const cost = clientAssignmentsList.reduce((acc, curr) => acc + parseFloat(curr.employee.dailyWage), 0);
+                                                const clientExpensesList = clientExpenses.filter(e => e.clientId === client.id);
+
+                                                const expensesTotal = clientExpensesList.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+                                                const cost = clientAssignmentsList.reduce((acc, curr) => acc + parseFloat(curr.employee.dailyWage), 0) + expensesTotal;
                                                 const money = clientMoneyList.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
                                                 return (
