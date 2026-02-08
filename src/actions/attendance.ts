@@ -80,3 +80,59 @@ export async function getMonthlyData(year: number, month: number) {
 
     return JSON.parse(JSON.stringify({ attendance, advances, monthlyAdvances }));
 }
+
+export async function saveBatchChanges(data: {
+    attendance: { employeeId: number; date: string; present: boolean; multiplier: number }[];
+    advances: { employeeId: number; date: string; amount: number }[];
+    monthlyAdvances: { employeeId: number; year: number; month: number; amount: number }[];
+}) {
+    const ds = await getDataSource();
+
+    await ds.transaction(async (manager) => {
+        // 1. Process Attendance Updates
+        for (const update of data.attendance) {
+            const { employeeId, date, present, multiplier } = update;
+            let record = await manager.findOne(Attendance, { where: { employeeId, date } });
+
+            if (record) {
+                record.present = present;
+                record.multiplier = multiplier;
+                await manager.save(record);
+            } else {
+                const newRecord = manager.create(Attendance, { employeeId, date, present, multiplier });
+                await manager.save(newRecord);
+            }
+        }
+
+        // 2. Process Advance Updates
+        for (const update of data.advances) {
+            const { employeeId, date, amount } = update;
+            let record = await manager.findOne(Advance, { where: { employeeId, date } });
+
+            if (record) {
+                record.amount = amount;
+                await manager.save(record);
+            } else {
+                const newRecord = manager.create(Advance, { employeeId, date, amount });
+                await manager.save(newRecord);
+            }
+        }
+
+        // 3. Process Monthly Advance Updates
+        for (const update of data.monthlyAdvances) {
+            const { employeeId, year, month, amount } = update;
+            let record = await manager.findOne(MonthlyAdvance, { where: { employeeId, year, month } });
+
+            if (record) {
+                record.amount = amount;
+                await manager.save(record);
+            } else {
+                const newRecord = manager.create(MonthlyAdvance, { employeeId, year, month, amount });
+                await manager.save(newRecord);
+            }
+        }
+    });
+
+    revalidatePath("/");
+    return { success: true };
+}

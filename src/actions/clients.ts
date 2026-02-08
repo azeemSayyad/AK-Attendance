@@ -97,20 +97,16 @@ export async function logClientMoney(clientId: number, date: string, amount: num
 
 export async function getClientMonthlyData(year: number, month: number) {
     const ds = await getDataSource();
-    const start = new Date(year, month, 2).toISOString().split("T")[0];
-    const end = new Date(year, month + 1, 1).toISOString().split("T")[0];
 
+    // Fetch all data regardless of date to support entries from any time period
     const assignments = await ds.getRepository(WorkAssignment).createQueryBuilder("wa")
         .leftJoinAndSelect("wa.employee", "emp")
-        .where("wa.date >= :start AND wa.date <= :end", { start, end })
         .getMany();
 
     const moneyTaken = await ds.getRepository(MoneyTaken).createQueryBuilder("mt")
-        .where("mt.date >= :start AND mt.date <= :end", { start, end })
         .getMany();
 
     const expenses = await ds.getRepository(ProjectExpense).createQueryBuilder("pe")
-        .where("pe.date >= :start AND pe.date <= :end", { start, end })
         .getMany();
 
     return JSON.parse(JSON.stringify({ assignments, moneyTaken, expenses }));
@@ -129,6 +125,20 @@ export async function updateWorkforce(clientId: number, date: string, employeeId
         );
         await repo.save(newAssignments);
     }
+
+    // Touch the client to update updatedAt
+    await ds.getRepository(Client).update(clientId, { updatedAt: new Date() });
+
+    revalidatePath("/");
+}
+
+export async function deleteProjectEntry(clientId: number, date: string) {
+    const ds = await getDataSource();
+
+    // Delete all data for this project entry
+    await ds.getRepository(WorkAssignment).delete({ clientId, date });
+    await ds.getRepository(MoneyTaken).delete({ clientId, date });
+    await ds.getRepository(ProjectExpense).delete({ clientId, date });
 
     // Touch the client to update updatedAt
     await ds.getRepository(Client).update(clientId, { updatedAt: new Date() });

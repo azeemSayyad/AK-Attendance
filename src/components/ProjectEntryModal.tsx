@@ -4,9 +4,10 @@ import React, { useState, useEffect } from "react";
 import { X, Users, IndianRupee, Calendar as CalendarIcon, Check, Plus, UserPlus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { updateWorkforce, logClientMoney } from "@/actions/clients";
+import { updateWorkforce, logClientMoney, deleteProjectEntry } from "@/actions/clients";
 import { addProjectExpense, deleteProjectExpense } from "@/actions/expenses";
 import { Trash2 } from "lucide-react";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface ProjectEntryModalProps {
     isOpen: boolean;
@@ -18,6 +19,8 @@ interface ProjectEntryModalProps {
     initialEmployees?: number[];
     initialMoney?: number;
     initialExpenses?: { id?: number, name: string, amount: number }[];
+    isEditMode?: boolean; // Track if editing existing entry
+    onDelete?: () => void; // Optional delete callback
 }
 
 const DEFAULT_EMPS: number[] = [];
@@ -126,7 +129,9 @@ export default function ProjectEntryModal({
     initialDate = new Date().toISOString().split("T")[0],
     initialEmployees = DEFAULT_EMPS,
     initialMoney = 0,
-    initialExpenses = []
+    initialExpenses = [],
+    isEditMode = false,
+    onDelete
 }: ProjectEntryModalProps) {
     const [date, setDate] = useState(initialDate);
     const [selectedEmps, setSelectedEmps] = useState<number[]>(initialEmployees);
@@ -190,6 +195,24 @@ export default function ProjectEntryModal({
         }
     };
 
+    const handleDelete = async () => {
+        if (!confirm("Are you sure you want to delete this entire project entry? This will remove all workforce, expenses, and money records for this date.")) {
+            return;
+        }
+        setLoading(true);
+        try {
+            await deleteProjectEntry(clientId, date);
+            onSuccess();
+            onClose();
+            if (onDelete) onDelete();
+        } catch (err) {
+            console.error(err);
+            alert("Failed to delete entry. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const addExpense = () => {
         if (!newExpenseName || !newExpenseAmount) return;
         setExpenses([...expenses, { name: newExpenseName, amount: newExpenseAmount }]);
@@ -213,7 +236,6 @@ export default function ProjectEntryModal({
         return expenses.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
     };
 
-    const today = new Date().toISOString().split("T")[0];
 
     return (
         <>
@@ -249,7 +271,6 @@ export default function ProjectEntryModal({
                                     <input
                                         type="date"
                                         value={date}
-                                        max={today}
                                         onChange={(e) => setDate(e.target.value)}
                                         className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-sm"
                                     />
@@ -300,7 +321,7 @@ export default function ProjectEntryModal({
                                         <IndianRupee size={12} /> Add Expenses
                                     </label>
 
-                                    <div className="flex gap-2">
+                                    <div className="flex gap-2 flex-col">
                                         <input
                                             type="text"
                                             placeholder="Item Name (e.g. Petrol)"
@@ -325,7 +346,7 @@ export default function ProjectEntryModal({
                                     </div>
 
                                     {expenses.length > 0 && (
-                                        <div className="space-y-2">
+                                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
                                             {expenses.map((exp, idx) => (
                                                 <div key={idx} className="flex justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-100">
                                                     <div className="flex flex-col">
@@ -337,7 +358,7 @@ export default function ProjectEntryModal({
                                                     </button>
                                                 </div>
                                             ))}
-                                            <div className="text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                            <div className="text-right text-[10px] font-black text-slate-400 uppercase tracking-widest pt-2 sticky bottom-0 bg-white">
                                                 Expenses Total: ₹{calculateTotalExpenses().toLocaleString()}
                                             </div>
                                         </div>
@@ -372,18 +393,36 @@ export default function ProjectEntryModal({
                             </div>
 
                             <div className="p-5 bg-slate-50 flex gap-3">
+                                {isEditMode && onDelete && (
+                                    <button
+                                        onClick={handleDelete}
+                                        disabled={loading}
+                                        className="py-4 px-4 bg-red-500 text-white font-black rounded-2xl text-xs uppercase tracking-widest hover:bg-red-600 transition-all disabled:opacity-50 font-sans flex items-center gap-2"
+                                        title="Delete Entry"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                )}
                                 <button
                                     onClick={onClose}
-                                    className="flex-1 py-4 bg-white text-slate-500 font-black rounded-2xl border border-slate-200 text-xs uppercase tracking-widest hover:bg-slate-100 transition-all font-sans"
+                                    disabled={loading}
+                                    className="flex-1 py-4 bg-white text-slate-500 font-black rounded-2xl border border-slate-200 text-xs uppercase tracking-widest hover:bg-slate-100 transition-all disabled:opacity-50 font-sans"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleSave}
                                     disabled={loading}
-                                    className="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-black rounded-2xl shadow-xl shadow-blue-500/20 text-xs uppercase tracking-widest hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 font-sans"
+                                    className="flex-[2] py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-black rounded-2xl shadow-xl shadow-blue-500/20 text-xs uppercase tracking-widest hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 font-sans flex items-center justify-center gap-2"
                                 >
-                                    {loading ? "Saving..." : "Save Entry"}
+                                    {loading ? (
+                                        <>
+                                            <Spinner size={16} className="text-white" />
+                                            Saving...
+                                        </>
+                                    ) : (
+                                        "Save Entry"
+                                    )}
                                 </button>
                             </div>
                         </motion.div>

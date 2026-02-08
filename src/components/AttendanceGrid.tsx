@@ -2,8 +2,9 @@
 
 import React from "react";
 import { cn } from "@/lib/utils";
-import { toggleAttendance, logAdvance, logMonthlyAdvance } from "@/actions/attendance";
+import { toggleAttendance, logAdvance, logMonthlyAdvance, saveBatchChanges } from "@/actions/attendance";
 import { Spinner } from "@/components/ui/Spinner";
+import { Button } from "@/components/ui/button";
 
 interface AttendanceGridProps {
     role: string;
@@ -15,14 +16,103 @@ interface AttendanceGridProps {
     onUpdate: () => void;
     onEmployeeClick: (employee: any) => void;
     loading?: boolean;
+    onPendingChangesChange?: (has: boolean, saveFn: () => void, isSaving: boolean) => void;
 }
 
 const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export default function AttendanceGrid({ role, employees, attendance, advances, monthlyAdvances, currentDate, onUpdate, onEmployeeClick, loading = false }: AttendanceGridProps) {
+export default function AttendanceGrid({ role, employees, attendance, advances, monthlyAdvances, currentDate, onUpdate, onEmployeeClick, loading = false, onPendingChangesChange }: AttendanceGridProps) {
+    // Local state to track purely what overrides server data
     const [localAttendance, setLocalAttendance] = React.useState<Record<string, any>>({});
-    const [updatingCells, setUpdatingCells] = React.useState<Record<string, boolean>>({});
+    const [localAdvances, setLocalAdvances] = React.useState<Record<string, number>>({});
+    const [localMonthlyAdvances, setLocalMonthlyAdvances] = React.useState<Record<string, number>>({});
 
+    // Derived state to know if we have pending changes
+    const hasPendingChanges = Object.keys(localAttendance).length > 0 || Object.keys(localAdvances).length > 0 || Object.keys(localMonthlyAdvances).length > 0;
+
+    const [isSaving, setIsSaving] = React.useState(false);
+    const autoSaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Auto-save timer (5 minutes)
+    const resetAutoSaveTimer = () => {
+        if (autoSaveTimerRef.current) {
+            clearTimeout(autoSaveTimerRef.current);
+        }
+        autoSaveTimerRef.current = setTimeout(() => {
+            saveAllChanges();
+        }, 5 * 60 * 1000); // 5 minutes
+    };
+
+    // Construct the batch payload and save
+    const saveAllChanges = async () => {
+        if (!hasPendingChanges) return;
+        setIsSaving(true);
+
+        try {
+            // Convert local state maps to arrays needed by server action
+            const attendanceUpdates = Object.values(localAttendance);
+
+            const advanceUpdates = Object.entries(localAdvances).map(([key, amount]) => {
+                // key is like "empId-dateStr" or "adv-empId-dateStr" - wait, we used simpler keys for advances?
+                // Let's check how we store them. 
+                // We will store them as `${empId}-${dateStr}` in localAdvances
+                const [empIdStr, ...dateParts] = key.split("-");
+                const dateStr = dateParts.join("-");
+                return { employeeId: parseInt(empIdStr), date: dateStr, amount };
+            });
+
+            const monthlyAdvanceUpdates = Object.entries(localMonthlyAdvances).map(([key, amount]) => {
+                // key is `monthly-${empId}`. But we need year/month which are capable of being derived from currentDate props
+                // actually, `monthly-empId` only supports current view. Correct.
+                const empId = parseInt(key.replace("monthly-", ""));
+                return { employeeId: empId, year: currentDate.getFullYear(), month: currentDate.getMonth(), amount };
+            });
+
+            await saveBatchChanges({
+                attendance: attendanceUpdates,
+                advances: advanceUpdates,
+                monthlyAdvances: monthlyAdvanceUpdates
+            });
+
+            // Clear local pending state on success
+            setLocalAttendance({});
+            setLocalAdvances({});
+            setLocalMonthlyAdvances({});
+
+            // Trigger parent refresh
+            onUpdate();
+        } catch (error) {
+            console.error("Failed to save batch changes:", error);
+            alert("Failed to save changes. Please try again.");
+        } finally {
+            setIsSaving(false);
+            if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+        }
+    };
+
+    // Notify parent when pending state or saving state changes
+    React.useEffect(() => {
+        if (onPendingChangesChange) onPendingChangesChange(hasPendingChanges, saveAllChanges, isSaving);
+    }, [hasPendingChanges, isSaving]);
+
+    // Warn before unloading if unsaved
+    React.useEffect(() => {
+        const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+            if (hasPendingChanges) {
+                e.preventDefault();
+                e.returnValue = "";
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [hasPendingChanges]);
+
+    // Cleanup timer on unmount
+    React.useEffect(() => {
+        return () => {
+            if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+        };
+    }, []);
 
     const getBillingDates = (date: Date) => {
         const year = date.getFullYear();
@@ -50,11 +140,28 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
     };
 
     const getAdvanceAmount = (empId: number, dateStr: string) => {
+        const key = `${empId}-${dateStr}`;
+        if (localAdvances[key] !== undefined) {
+            return localAdvances[key];
+        }
         const adv = advances.find(a => a.employeeId === empId && a.date === dateStr);
-        return adv ? adv.amount : null;
+        return adv ? adv.amount : 0;
     };
 
-    const handleToggle = async (empId: number, dateObj: Date) => {
+    const getMonthlyAdvanceAmount = (empId: number) => {
+        const key = `monthly-${empId}`;
+        if (localMonthlyAdvances[key] !== undefined) {
+            return localMonthlyAdvances[key];
+        }
+        const mAdv = monthlyAdvances.find(m =>
+            m.employeeId === empId &&
+            m.year === currentDate.getFullYear() &&
+            m.month === currentDate.getMonth()
+        );
+        return mAdv ? mAdv.amount : "";
+    };
+
+    const handleToggle = (empId: number, dateObj: Date) => {
         if (role !== "admin") return;
         const dateStr = dateObj.toISOString().split("T")[0];
         const key = `${empId}-${dateStr}`;
@@ -88,66 +195,31 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
             nextMultiplier = 1.0;
         }
 
-        // 1. Update local state immediately
-        const optimisticUpdate = { employeeId: empId, date: dateStr, present: isPresent, multiplier: nextMultiplier };
-        setLocalAttendance(prev => ({ ...prev, [key]: optimisticUpdate }));
-
-        // 2. Set loading state
-        setUpdatingCells(prev => ({ ...prev, [key]: true }));
-
-        try {
-            await toggleAttendance(empId, dateStr, isPresent, nextMultiplier);
-            onUpdate();
-        } catch (err) {
-            console.error("Failed to save attendance:", err);
-            // Revert optimistic update if needed, but for now we just log
-        } finally {
-            setUpdatingCells(prev => {
-                const next = { ...prev };
-                delete next[key];
-                return next;
-            });
-        }
+        const update = { employeeId: empId, date: dateStr, present: isPresent, multiplier: nextMultiplier };
+        setLocalAttendance(prev => ({ ...prev, [key]: update }));
+        resetAutoSaveTimer();
     };
 
 
-
-    const handleMonthlyAdvanceChange = async (empId: number, amount: string) => {
+    const handleMonthlyAdvanceChange = (empId: number, amount: string) => {
         if (role !== "admin") return;
         const key = `monthly-${empId}`;
-        setUpdatingCells(prev => ({ ...prev, [key]: true }));
-        try {
-            let val = amount === "" ? 0 : parseFloat(amount);
-            if (val > 1000000) val = 1000000;
-            await logMonthlyAdvance(empId, currentDate.getFullYear(), currentDate.getMonth(), val);
-            onUpdate();
-        } finally {
-            setUpdatingCells(prev => {
-                const next = { ...prev };
-                delete next[key];
-                return next;
-            });
-        }
+        let val = amount === "" ? 0 : parseFloat(amount);
+        if (val > 1000000) val = 1000000;
+
+        setLocalMonthlyAdvances(prev => ({ ...prev, [key]: val }));
+        resetAutoSaveTimer();
     };
 
-    const handleAdvanceChange = async (empId: number, dateObj: Date, amount: string) => {
+    const handleAdvanceChange = (empId: number, dateObj: Date, amount: string) => {
         if (role !== "admin") return;
         const dateStr = dateObj.toISOString().split("T")[0];
-        const key = `adv-${empId}-${dateStr}`;
-        setUpdatingCells(prev => ({ ...prev, [key]: true }));
+        const key = `${empId}-${dateStr}`;
+        let val = amount === "" ? 0 : parseFloat(amount);
+        if (val > 1000000) val = 1000000;
 
-        try {
-            let val = amount === "" ? 0 : parseFloat(amount);
-            if (val > 1000000) val = 1000000;
-            await logAdvance(empId, dateStr, val);
-            onUpdate();
-        } finally {
-            setUpdatingCells(prev => {
-                const next = { ...prev };
-                delete next[key];
-                return next;
-            });
-        }
+        setLocalAdvances(prev => ({ ...prev, [key]: val }));
+        resetAutoSaveTimer();
     };
 
     return (
@@ -157,6 +229,9 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
                     <Spinner size={40} className="text-blue-600" />
                 </div>
             )}
+
+            {/* Save button is rendered by parent (Dashboard) so it can sit under the search bar. */}
+
             <div className="overflow-auto no-scrollbar relative">
                 <table className="w-full border-collapse">
                     <thead className="sticky top-0 z-40 bg-gray-100">
@@ -184,29 +259,27 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
                                 Advance
                             </td>
                             {employees.map(emp => {
-                                const mAdv = monthlyAdvances.find(m =>
-                                    m.employeeId === emp.id &&
-                                    m.year === currentDate.getFullYear() &&
-                                    m.month === currentDate.getMonth()
-                                );
+                                const amount = getMonthlyAdvanceAmount(emp.id);
+                                const isDirty = localMonthlyAdvances[`monthly-${emp.id}`] !== undefined;
+
                                 return (
-                                    <td key={emp.id} className="p-1.5 border-r border-blue-100 bg-blue-50/10 relative">
-                                        {updatingCells[`monthly-${emp.id}`] ? (
-                                            <div className="w-full h-full flex items-center justify-center">
-                                                <Spinner size={16} />
-                                            </div>
-                                        ) : (
-                                            <input
-                                                key={`${emp.id}-${currentDate.getMonth()}-${currentDate.getFullYear()}`}
-                                                disabled={role !== "admin"}
-                                                type="number"
-                                                max={1000000}
-                                                placeholder="0"
-                                                className="w-full text-[11px] py-1 px-1.5 border-none focus:ring-1 focus:ring-blue-300 rounded bg-white transition-all font-black text-blue-700 shadow-sm"
-                                                defaultValue={mAdv ? mAdv.amount : ""}
-                                                onBlur={(e) => handleMonthlyAdvanceChange(emp.id, e.target.value)}
-                                            />
-                                        )}
+                                    <td key={emp.id} className={cn(
+                                        "p-1.5 border-r border-blue-100 bg-blue-50/10 relative",
+                                        isDirty && "bg-amber-50"
+                                    )}>
+                                        <input
+                                            key={`${emp.id}-${currentDate.getMonth()}-${currentDate.getFullYear()}`}
+                                            disabled={role !== "admin"}
+                                            type="number"
+                                            max={1000000}
+                                            placeholder="0"
+                                            className={cn(
+                                                "w-full text-[11px] py-1 px-1.5 border-none focus:ring-1 focus:ring-blue-300 rounded bg-white transition-all font-black text-blue-700 shadow-sm",
+                                                isDirty && "ring-1 ring-amber-400 bg-amber-50/50"
+                                            )}
+                                            value={amount === 0 ? "" : amount}
+                                            onChange={(e) => handleMonthlyAdvanceChange(emp.id, e.target.value)}
+                                        />
                                     </td>
                                 );
                             })}
@@ -230,7 +303,7 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
                                 >
                                     <td className={cn(
                                         "sticky left-0 z-20 p-2 text-[11px] border-r border-slate-200",
-                                        isToday ? "bg-gray-100 text-black" : "text-slate-600 bg-gray-100"
+                                        isToday ? "bg-gray-200 text-black" : "text-slate-600 bg-gray-100"
                                     )}>
                                         <div className="font-black leading-none">{dayNum} {monthShort}</div>
                                         <div className="text-[8px] uppercase font-bold text-slate-400 mt-1">{dayName}</div>
@@ -241,6 +314,9 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
                                         const multiplier = status ? Number(status.multiplier) : 1.0;
                                         const advance = getAdvanceAmount(emp.id, dateStr);
 
+                                        const isDirtyAttendance = localAttendance[`${emp.id}-${dateStr}`] !== undefined;
+                                        const isDirtyAdvance = localAdvances[`${emp.id}-${dateStr}`] !== undefined;
+
                                         return (
                                             <td key={emp.id} className={cn(
                                                 "p-1.5 border-r border-slate-100 align-top bg-slate-50/30",
@@ -249,30 +325,25 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
                                                 <div className="flex flex-col gap-1">
                                                     {/* Advance Input */}
                                                     <div className="relative group min-h-[24px]">
-                                                        {updatingCells[`adv-${emp.id}-${dateStr}`] ? (
-                                                            <div className="absolute inset-0 flex items-center justify-center">
-                                                                <Spinner size={14} />
-                                                            </div>
-                                                        ) : (
-                                                            <input
-                                                                disabled={role !== "admin" || isFuture}
-                                                                type="number"
-                                                                max={1000000}
-                                                                placeholder="₹0"
-                                                                className={cn(
-                                                                    "w-full text-[10px] py-1 px-1.5 border-none focus:ring-1 focus:ring-blue-300 rounded bg-white transition-all font-bold shadow-sm",
-                                                                    advance > 0 && "bg-amber-100 text-amber-800",
-                                                                    (role !== "admin" || isFuture) && "cursor-not-allowed opacity-50 shadow-none"
-                                                                )}
-                                                                defaultValue={advance || ""}
-                                                                onBlur={(e) => handleAdvanceChange(emp.id, dateObj, e.target.value)}
-                                                            />
-                                                        )}
+                                                        <input
+                                                            disabled={role !== "admin" || isFuture}
+                                                            type="number"
+                                                            max={1000000}
+                                                            placeholder="₹0"
+                                                            className={cn(
+                                                                "w-full text-[10px] py-1 px-1.5 border-none focus:ring-1 focus:ring-blue-300 rounded bg-white transition-all font-bold shadow-sm",
+                                                                advance > 0 && "bg-amber-100 text-amber-800",
+                                                                (role !== "admin" || isFuture) && "cursor-not-allowed opacity-50 shadow-none",
+                                                                isDirtyAdvance && "ring-1 ring-amber-400 bg-amber-50/50"
+                                                            )}
+                                                            value={advance || ""}
+                                                            onChange={(e) => handleAdvanceChange(emp.id, dateObj, e.target.value)}
+                                                        />
                                                     </div>
 
                                                     {/* Attendance Toggle */}
                                                     <button
-                                                        disabled={role !== "admin" || isFuture || updatingCells[`${emp.id}-${dateStr}`]}
+                                                        disabled={role !== "admin" || isFuture}
                                                         onClick={() => handleToggle(emp.id, dateObj)}
                                                         className={cn(
                                                             "w-full h-8 rounded-lg flex flex-col items-center justify-center transition-all",
@@ -286,16 +357,12 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
                                                                     ? "bg-rose-500 text-white font-black"
                                                                     : "bg-white text-slate-300 border border-slate-200 shadow-sm",
                                                             (role !== "admin" || isFuture) && "cursor-default shadow-none opacity-50",
-                                                            updatingCells[`${emp.id}-${dateStr}`] && "opacity-80 cursor-wait"
+                                                            isDirtyAttendance && "ring-2 ring-amber-400 ring-offset-1"
                                                         )}
                                                     >
-                                                        {updatingCells[`${emp.id}-${dateStr}`] ? (
-                                                            <Spinner size={16} className="text-current" />
-                                                        ) : (
-                                                            <span className="text-[11px] font-black tracking-tighter">
-                                                                {isPresent ? (multiplier === 1 ? "X" : `x${multiplier}`) : status ? "0" : " "}
-                                                            </span>
-                                                        )}
+                                                        <span className="text-[11px] font-black tracking-tighter">
+                                                            {isPresent ? (multiplier === 1 ? "X" : `x${multiplier}`) : status ? "0" : " "}
+                                                        </span>
                                                     </button>
                                                 </div>
                                             </td>

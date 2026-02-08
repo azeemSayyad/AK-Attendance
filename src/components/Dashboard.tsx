@@ -7,7 +7,7 @@ import { getEmployees } from "@/actions/employees";
 import { getMonthlyData } from "@/actions/attendance";
 import EmployeeModal from "@/components/EmployeeModal";
 import EmployeeSummarySheet from "@/components/EmployeeSummarySheet";
-import { Plus, Search, ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { Plus, Search, ChevronLeft, ChevronRight, LogOut, RefreshCw, Save } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { cn } from "@/lib/utils";
 import { getClients, getClientMonthlyData } from "@/actions/clients";
@@ -39,6 +39,9 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
     const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [gridHasPending, setGridHasPending] = useState(false);
+    const [gridSaveFn, setGridSaveFn] = useState<(() => void) | null>(null);
+    const [gridIsSaving, setGridIsSaving] = useState(false);
 
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const fetchData = async () => {
@@ -215,6 +218,14 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                             </button>
                         )}
                         <button
+                            onClick={fetchData}
+                            disabled={isLoading}
+                            className="p-2 text-slate-500 hover:text-blue-600 transition-colors bg-slate-50 rounded-xl disabled:opacity-50"
+                            title="Refresh Data"
+                        >
+                            <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
+                        </button>
+                        <button
                             onClick={downloadPDF}
                             className="p-2 text-slate-500 hover:text-blue-600 transition-colors bg-slate-50 rounded-xl"
                             title="Download PDF"
@@ -313,6 +324,20 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                             )}
                         </div>
 
+                        {/* Save Updates button under search bar (positioned here so it's visually below the search) */}
+                        {role === "admin" && gridHasPending && (
+                            <div className="mt-3 flex">
+                                <button
+                                    onClick={() => gridSaveFn && gridSaveFn()}
+                                    disabled={gridIsSaving}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-sm bg-gradient-to-r from-indigo-500 via-blue-600 to-purple-600 text-white shadow-lg hover:opacity-90 active:scale-95"
+                                >
+                                    {gridIsSaving ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save size={16} />}
+                                    {gridIsSaving ? "Saving..." : "Save Updates"}
+                                </button>
+                            </div>
+                        )}
+
                         {/* Row 8: Table */}
                         <div id="attendance-grid-container" className="pt-2">
                             <AttendanceGrid
@@ -323,6 +348,11 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                                 monthlyAdvances={monthlyAdvances}
                                 currentDate={currentDate}
                                 onUpdate={fetchData}
+                                onPendingChangesChange={(has, saveFn, isSaving) => {
+                                    setGridHasPending(has);
+                                    setGridSaveFn(() => saveFn);
+                                    setGridIsSaving(isSaving);
+                                }}
                                 onEmployeeClick={handleEmployeeClick}
                                 loading={isLoading}
                             />
@@ -371,27 +401,36 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                                     </button>
                                 </div>
                                 <div className="grid grid-cols-1 gap-3">
-                                    {clients.map(client => {
-                                        const clientAssignmentsList = clientAssignments.filter(a => a.clientId === client.id);
-                                        const clientMoneyList = clientMoney.filter(m => m.clientId === client.id);
-                                        const cost = clientAssignmentsList.reduce((acc, curr) => acc + parseFloat(curr.employee.dailyWage), 0);
-                                        const money = clientMoneyList.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
-
-                                        return (
-                                            <ClientCard
-                                                key={client.id}
-                                                client={client}
-                                                totalCost={cost}
-                                                moneyTaken={money}
-                                                onClick={() => setSelectedClientId(client.id)}
-                                            />
-                                        );
-                                    })}
-                                    {clients.length === 0 && (
-                                        <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-                                            <Building2 className="mx-auto text-slate-300 mb-2" size={48} />
-                                            <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No project sites added yet.</p>
+                                    {isLoading ? (
+                                        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100">
+                                            <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin mb-4" />
+                                            <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">Loading projects...</p>
                                         </div>
+                                    ) : (
+                                        <>
+                                            {clients.map(client => {
+                                                const clientAssignmentsList = clientAssignments.filter(a => a.clientId === client.id);
+                                                const clientMoneyList = clientMoney.filter(m => m.clientId === client.id);
+                                                const cost = clientAssignmentsList.reduce((acc, curr) => acc + parseFloat(curr.employee.dailyWage), 0);
+                                                const money = clientMoneyList.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+
+                                                return (
+                                                    <ClientCard
+                                                        key={client.id}
+                                                        client={client}
+                                                        totalCost={cost}
+                                                        moneyTaken={money}
+                                                        onClick={() => setSelectedClientId(client.id)}
+                                                    />
+                                                );
+                                            })}
+                                            {clients.length === 0 && (
+                                                <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                                                    <Building2 className="mx-auto text-slate-300 mb-2" size={48} />
+                                                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No project sites added yet.</p>
+                                                </div>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </>

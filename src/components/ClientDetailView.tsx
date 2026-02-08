@@ -5,7 +5,7 @@ import { ArrowLeft, Plus, Calendar as CalendarIcon, Users, IndianRupee, Trash2, 
 import { cn } from "@/lib/utils";
 import ProjectEntryModal from "./ProjectEntryModal";
 import ConfirmModal from "./ConfirmModal";
-import { deleteClient } from "@/actions/clients";
+import { deleteClient, deleteProjectEntry } from "@/actions/clients";
 
 interface ClientDetailViewProps {
     role: string;
@@ -202,15 +202,35 @@ export default function ClientDetailView({
                                     </div>
                                 </div>
 
-                                <div className="flex flex-col items-end gap-1">
+                                <div className="flex flex-col items-end gap-2">
                                     <div className="text-[10px] font-black text-rose-500 italic">Cost: ₹{data.cost.toLocaleString()}</div>
                                     {role === "admin" && (
-                                        <button
-                                            onClick={() => handleEdit(date)}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 bg-slate-50 text-slate-400 rounded-lg hover:text-blue-600 hover:bg-blue-50"
-                                        >
-                                            <Edit2 size={12} />
-                                        </button>
+                                        <div className="flex gap-1">
+                                            <button
+                                                onClick={() => handleEdit(date)}
+                                                className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                                                title="Edit Entry"
+                                            >
+                                                <Edit2 size={12} />
+                                            </button>
+                                            <button
+                                                onClick={async () => {
+                                                    if (confirm(`Delete all entries for ${new Date(date).toLocaleDateString()}? This will remove all workforce, expenses, and money records for this date.`)) {
+                                                        try {
+                                                            await deleteProjectEntry(client.id, date);
+                                                            onUpdate();
+                                                        } catch (err) {
+                                                            console.error(err);
+                                                            alert("Failed to delete entry. Please try again.");
+                                                        }
+                                                    }
+                                                }}
+                                                className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                                                title="Delete Entry"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -239,6 +259,12 @@ export default function ClientDetailView({
                 initialEmployees={editingEntry?.employees}
                 initialMoney={editingEntry?.money}
                 initialExpenses={editingEntry?.expenses}
+                isEditMode={!!editingEntry}
+                onDelete={() => {
+                    setIsEntryModalOpen(false);
+                    setEditingEntry(null);
+                    onUpdate();
+                }}
             />
             <ConfirmModal
                 isOpen={isConfirmOpen}
