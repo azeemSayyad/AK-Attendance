@@ -14,7 +14,8 @@ import { getClients, getClientMonthlyData } from "@/actions/clients";
 import ClientModal from "@/components/ClientModal";
 import ClientCard from "@/components/ClientCard";
 import ClientDetailView from "@/components/ClientDetailView";
-import { Download, Building2, Users as UsersIcon, Wallet, Briefcase } from "lucide-react";
+import ChangePinModal from "@/components/ChangePinModal";
+import { Download, Building2, Users as UsersIcon, Wallet, Briefcase, Settings } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
@@ -26,45 +27,56 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
     const [clients, setClients] = useState<any[]>([]);
     const [clientAssignments, setClientAssignments] = useState<any[]>([]);
     const [clientMoney, setClientMoney] = useState<any[]>([]);
+    const [clientExpenses, setClientExpenses] = useState<any[]>([]);
     const [monthlyAdvances, setMonthlyAdvances] = useState<any[]>([]);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [searchQuery, setSearchQuery] = useState("");
+    const [isLoading, setIsLoading] = useState(true);
 
     const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+    const [isChangePinModalOpen, setIsChangePinModalOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
 
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     const fetchData = async () => {
-        // Clear old data to prevent "ghost" values while loading
-        setAttendanceData([]);
-        setAdvancesData([]);
-        setMonthlyAdvances([]);
+        setIsLoading(true);
+        try {
+            // Clear old data to prevent "ghost" values while loading
+            setAttendanceData([]);
+            setAdvancesData([]);
+            setMonthlyAdvances([]);
 
-        let emps = await getEmployees(currentDate.getFullYear(), currentDate.getMonth());
-        const { attendance, advances, monthlyAdvances: mAdvs } = await getMonthlyData(currentDate.getFullYear(), currentDate.getMonth());
+            let emps = await getEmployees(currentDate.getFullYear(), currentDate.getMonth());
+            const { attendance, advances, monthlyAdvances: mAdvs } = await getMonthlyData(currentDate.getFullYear(), currentDate.getMonth());
 
-        if (role === "admin") {
-            const cls = await getClients();
-            const { assignments, moneyTaken } = await getClientMonthlyData(currentDate.getFullYear(), currentDate.getMonth());
-            setClients(cls);
-            setClientAssignments(assignments);
-            setClientMoney(moneyTaken);
-        }
+            if (role === "admin") {
+                const cls = await getClients();
+                const { assignments, moneyTaken, expenses } = await getClientMonthlyData(currentDate.getFullYear(), currentDate.getMonth());
+                setClients(cls);
+                setClientAssignments(assignments);
+                setClientMoney(moneyTaken);
+                setClientExpenses(expenses);
+            }
 
-        if (role === "employee" && userId) {
-            const empIdInt = parseInt(userId);
-            setEmployees(emps.filter((e: any) => e.id.toString() === userId));
-            setAttendanceData(attendance.filter((a: any) => a.employeeId === empIdInt));
-            setAdvancesData(advances.filter((a: any) => a.employeeId === empIdInt));
-            setMonthlyAdvances(mAdvs.filter((m: any) => m.employeeId === empIdInt));
-        } else {
-            setEmployees(emps);
-            setAttendanceData(attendance);
-            setAdvancesData(advances);
-            setMonthlyAdvances(mAdvs);
+            if (role === "employee" && userId) {
+                const empIdInt = parseInt(userId);
+                setEmployees(emps.filter((e: any) => e.id.toString() === userId));
+                setAttendanceData(attendance.filter((a: any) => a.employeeId === empIdInt));
+                setAdvancesData(advances.filter((a: any) => a.employeeId === empIdInt));
+                setMonthlyAdvances(mAdvs.filter((m: any) => m.employeeId === empIdInt));
+            } else {
+                setEmployees(emps);
+                setAttendanceData(attendance);
+                setAdvancesData(advances);
+                setMonthlyAdvances(mAdvs);
+            }
+        } catch (error) {
+            console.error("Error fetching data:", error);
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -193,6 +205,15 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                         {role}
                     </span>
                     <div className="flex items-center gap-3">
+                        {role === "admin" && (
+                            <button
+                                onClick={() => setIsChangePinModalOpen(true)}
+                                className="p-2 text-slate-500 hover:text-blue-600 transition-colors bg-slate-50 rounded-xl"
+                                title="Change Admin PIN"
+                            >
+                                <Settings size={18} />
+                            </button>
+                        )}
                         <button
                             onClick={downloadPDF}
                             className="p-2 text-slate-500 hover:text-blue-600 transition-colors bg-slate-50 rounded-xl"
@@ -303,6 +324,7 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                                 currentDate={currentDate}
                                 onUpdate={fetchData}
                                 onEmployeeClick={handleEmployeeClick}
+                                loading={isLoading}
                             />
                         </div>
                     </>
@@ -315,6 +337,7 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                                 employees={employees}
                                 assignments={clientAssignments}
                                 moneyTaken={clientMoney}
+                                expenses={clientExpenses}
                                 onBack={() => setSelectedClientId(null)}
                                 onUpdate={fetchData}
                             />
@@ -447,6 +470,11 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                 isOpen={isClientModalOpen}
                 onClose={() => setIsClientModalOpen(false)}
                 onSuccess={fetchData}
+            />
+
+            <ChangePinModal
+                isOpen={isChangePinModalOpen}
+                onClose={() => setIsChangePinModalOpen(false)}
             />
 
             <EmployeeSummarySheet

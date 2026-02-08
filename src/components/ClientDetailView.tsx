@@ -13,6 +13,7 @@ interface ClientDetailViewProps {
     employees: any[];
     assignments: any[];
     moneyTaken: any[];
+    expenses: any[];
     onBack: () => void;
     onUpdate: () => void;
 }
@@ -23,6 +24,7 @@ export default function ClientDetailView({
     employees,
     assignments,
     moneyTaken,
+    expenses,
     onBack,
     onUpdate
 }: ClientDetailViewProps) {
@@ -49,23 +51,32 @@ export default function ClientDetailView({
     // Grouping entries by date
     const datesWithData = Array.from(new Set([
         ...assignments.filter(a => a.clientId === client.id).map(a => a.date),
-        ...moneyTaken.filter(m => m.clientId === client.id).map(m => m.date)
+        ...moneyTaken.filter(m => m.clientId === client.id).map(m => m.date),
+        ...expenses.filter(e => e.clientId === client.id).map(e => e.date)
     ])).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
     const getDailyData = (date: string) => {
         const dayAssignments = assignments.filter(a => a.clientId === client.id && a.date === date);
         const dayMoney = moneyTaken.find(m => m.clientId === client.id && m.date === date);
-        const cost = dayAssignments.reduce((acc, curr) => acc + parseFloat(curr.employee.dailyWage), 0);
+        const dayExpenses = expenses.filter(e => e.clientId === client.id && e.date === date);
+
+        const workforceCost = dayAssignments.reduce((acc, curr) => acc + parseFloat(curr.employee.dailyWage), 0);
+        const expensesCost = dayExpenses.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+
         return {
             assignments: dayAssignments,
             money: dayMoney ? parseFloat(dayMoney.amount) : 0,
-            cost
+            expenses: dayExpenses,
+            cost: workforceCost + expensesCost
         };
     };
 
     const totalCost = assignments
         .filter(a => a.clientId === client.id)
-        .reduce((acc, curr) => acc + parseFloat(curr.employee.dailyWage), 0);
+        .reduce((acc, curr) => acc + parseFloat(curr.employee.dailyWage), 0) +
+        expenses
+            .filter(e => e.clientId === client.id)
+            .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
     const totalMoney = moneyTaken
         .filter(m => m.clientId === client.id)
@@ -77,7 +88,8 @@ export default function ClientDetailView({
         setEditingEntry({
             date,
             employees: data.assignments.map(a => a.employeeId),
-            money: data.money
+            money: data.money,
+            expenses: data.expenses
         });
         setIsEntryModalOpen(true);
     };
@@ -178,6 +190,15 @@ export default function ClientDetailView({
                                                 </span>
                                             ))}
                                         </div>
+                                        {data.expenses.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-1">
+                                                {data.expenses.map((e: any) => (
+                                                    <span key={e.id} className="text-[8px] bg-rose-50 text-rose-500 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                                        {e.name}: ₹{parseFloat(e.amount).toLocaleString()}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -217,6 +238,7 @@ export default function ClientDetailView({
                 initialDate={editingEntry?.date}
                 initialEmployees={editingEntry?.employees}
                 initialMoney={editingEntry?.money}
+                initialExpenses={editingEntry?.expenses}
             />
             <ConfirmModal
                 isOpen={isConfirmOpen}

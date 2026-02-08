@@ -5,6 +5,8 @@ import { X, Users, IndianRupee, Calendar as CalendarIcon, Check, Plus, UserPlus 
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { updateWorkforce, logClientMoney } from "@/actions/clients";
+import { addProjectExpense, deleteProjectExpense } from "@/actions/expenses";
+import { Trash2 } from "lucide-react";
 
 interface ProjectEntryModalProps {
     isOpen: boolean;
@@ -15,6 +17,7 @@ interface ProjectEntryModalProps {
     initialDate?: string;
     initialEmployees?: number[];
     initialMoney?: number;
+    initialExpenses?: { id?: number, name: string, amount: number }[];
 }
 
 const DEFAULT_EMPS: number[] = [];
@@ -122,25 +125,35 @@ export default function ProjectEntryModal({
     employees,
     initialDate = new Date().toISOString().split("T")[0],
     initialEmployees = DEFAULT_EMPS,
-    initialMoney = 0
+    initialMoney = 0,
+    initialExpenses = []
 }: ProjectEntryModalProps) {
     const [date, setDate] = useState(initialDate);
     const [selectedEmps, setSelectedEmps] = useState<number[]>(initialEmployees);
     const [money, setMoney] = useState<string>(initialMoney.toString());
+    const [expenses, setExpenses] = useState<{ id?: number, name: string, amount: string }[]>(
+        initialExpenses.map(e => ({ ...e, amount: e.amount.toString() }))
+    );
+    const [newExpenseName, setNewExpenseName] = useState("");
+    const [newExpenseAmount, setNewExpenseAmount] = useState("");
     const [loading, setLoading] = useState(false);
     const [isWorkforceModalOpen, setIsWorkforceModalOpen] = useState(false);
 
     // Sync state when props change, but with protection against infinite loops
     // We use JSON stringify because initialEmployees is a new array every time the parent re-renders
     const empsKey = JSON.stringify(initialEmployees);
+    const expensesKey = JSON.stringify(initialExpenses);
 
     useEffect(() => {
         if (isOpen) {
             setDate(initialDate);
             setSelectedEmps(initialEmployees);
             setMoney(initialMoney.toString());
+            setExpenses(initialExpenses.map(e => ({ ...e, amount: e.amount.toString() })));
+            setNewExpenseName("");
+            setNewExpenseAmount("");
         }
-    }, [isOpen, initialDate, empsKey, initialMoney]);
+    }, [isOpen, initialDate, empsKey, initialMoney, expensesKey]);
 
 
     const calculateTotalCost = () => {
@@ -161,6 +174,13 @@ export default function ProjectEntryModal({
             if (moneyVal > 1000000) moneyVal = 1000000;
             await logClientMoney(clientId, date, moneyVal);
 
+            // Save New Expenses (existing ones are already saved, deletions handled immediately)
+            for (const exp of expenses) {
+                if (!exp.id && exp.name && exp.amount) {
+                    await addProjectExpense(clientId, date, exp.name, parseFloat(exp.amount));
+                }
+            }
+
             onSuccess();
             onClose();
         } catch (err) {
@@ -168,6 +188,29 @@ export default function ProjectEntryModal({
         } finally {
             setLoading(false);
         }
+    };
+
+    const addExpense = () => {
+        if (!newExpenseName || !newExpenseAmount) return;
+        setExpenses([...expenses, { name: newExpenseName, amount: newExpenseAmount }]);
+        setNewExpenseName("");
+        setNewExpenseAmount("");
+    };
+
+    const removeExpense = async (index: number) => {
+        const exp = expenses[index];
+        if (exp.id) {
+            if (confirm("Delete this expense properly?")) {
+                await deleteProjectExpense(exp.id);
+                setExpenses(expenses.filter((_, i) => i !== index));
+            }
+        } else {
+            setExpenses(expenses.filter((_, i) => i !== index));
+        }
+    };
+
+    const calculateTotalExpenses = () => {
+        return expenses.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
     };
 
     const today = new Date().toISOString().split("T")[0];
@@ -247,8 +290,58 @@ export default function ProjectEntryModal({
 
                                     <div className="p-3 bg-blue-50/50 rounded-2xl border border-blue-100/50 flex justify-between items-center">
                                         <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Total Daily Cost</span>
-                                        <span className="text-sm font-black text-blue-600">₹{calculateTotalCost().toLocaleString()}</span>
+                                        <span className="text-sm font-black text-blue-600">₹{(calculateTotalCost() + calculateTotalExpenses()).toLocaleString()}</span>
                                     </div>
+                                </div>
+
+                                {/* Expenses Section */}
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                        <IndianRupee size={12} /> Add Expenses
+                                    </label>
+
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Item Name (e.g. Petrol)"
+                                            value={newExpenseName}
+                                            onChange={(e) => setNewExpenseName(e.target.value)}
+                                            className="flex-[2] px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <input
+                                            type="number"
+                                            placeholder="Amount"
+                                            value={newExpenseAmount}
+                                            onChange={(e) => setNewExpenseAmount(e.target.value)}
+                                            className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+                                        />
+                                        <button
+                                            onClick={addExpense}
+                                            disabled={!newExpenseName || !newExpenseAmount}
+                                            className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                        >
+                                            <Plus size={16} />
+                                        </button>
+                                    </div>
+
+                                    {expenses.length > 0 && (
+                                        <div className="space-y-2">
+                                            {expenses.map((exp, idx) => (
+                                                <div key={idx} className="flex justify-between items-center bg-slate-50 p-2 rounded-xl border border-slate-100">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-bold text-slate-700">{exp.name}</span>
+                                                        <span className="text-[10px] text-slate-400 font-bold">₹{parseFloat(exp.amount).toLocaleString()}</span>
+                                                    </div>
+                                                    <button onClick={() => removeExpense(idx)} className="text-red-400 hover:text-red-600 p-1">
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                            <div className="text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                Expenses Total: ₹{calculateTotalExpenses().toLocaleString()}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Money Taken */}

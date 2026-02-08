@@ -3,6 +3,7 @@
 import React from "react";
 import { cn } from "@/lib/utils";
 import { toggleAttendance, logAdvance, logMonthlyAdvance } from "@/actions/attendance";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface AttendanceGridProps {
     role: string;
@@ -13,13 +14,15 @@ interface AttendanceGridProps {
     currentDate: Date;
     onUpdate: () => void;
     onEmployeeClick: (employee: any) => void;
+    loading?: boolean;
 }
 
 const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-export default function AttendanceGrid({ role, employees, attendance, advances, monthlyAdvances, currentDate, onUpdate, onEmployeeClick }: AttendanceGridProps) {
+export default function AttendanceGrid({ role, employees, attendance, advances, monthlyAdvances, currentDate, onUpdate, onEmployeeClick, loading = false }: AttendanceGridProps) {
     const [localAttendance, setLocalAttendance] = React.useState<Record<string, any>>({});
-    const timers = React.useRef<Record<string, NodeJS.Timeout>>({});
+    const [updatingCells, setUpdatingCells] = React.useState<Record<string, boolean>>({});
+
 
     const getBillingDates = (date: Date) => {
         const year = date.getFullYear();
@@ -51,7 +54,7 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
         return adv ? adv.amount : null;
     };
 
-    const handleToggle = (empId: number, dateObj: Date) => {
+    const handleToggle = async (empId: number, dateObj: Date) => {
         if (role !== "admin") return;
         const dateStr = dateObj.toISOString().split("T")[0];
         const key = `${empId}-${dateStr}`;
@@ -89,54 +92,71 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
         const optimisticUpdate = { employeeId: empId, date: dateStr, present: isPresent, multiplier: nextMultiplier };
         setLocalAttendance(prev => ({ ...prev, [key]: optimisticUpdate }));
 
-        // 2. Clear existing timer
-        if (timers.current[key]) {
-            clearTimeout(timers.current[key]);
-        }
+        // 2. Set loading state
+        setUpdatingCells(prev => ({ ...prev, [key]: true }));
 
-        // 3. Set a new timer for 2 seconds
-        timers.current[key] = setTimeout(async () => {
-            try {
-                await toggleAttendance(empId, dateStr, isPresent, nextMultiplier);
-                // Clear local state once DB is updated and parent refreshes
-                setLocalAttendance(prev => {
-                    const next = { ...prev };
-                    delete next[key];
-                    return next;
-                });
-                onUpdate();
-            } catch (err) {
-                console.error("Failed to save attendance:", err);
-            }
-        }, 2000);
+        try {
+            await toggleAttendance(empId, dateStr, isPresent, nextMultiplier);
+            onUpdate();
+        } catch (err) {
+            console.error("Failed to save attendance:", err);
+            // Revert optimistic update if needed, but for now we just log
+        } finally {
+            setUpdatingCells(prev => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+        }
     };
 
-    // Cleanup timers on unmount
-    React.useEffect(() => {
-        return () => {
-            Object.values(timers.current).forEach(clearTimeout);
-        };
-    }, []);
+
 
     const handleMonthlyAdvanceChange = async (empId: number, amount: string) => {
         if (role !== "admin") return;
-        let val = amount === "" ? 0 : parseFloat(amount);
-        if (val > 1000000) val = 1000000;
-        await logMonthlyAdvance(empId, currentDate.getFullYear(), currentDate.getMonth(), val);
-        onUpdate();
+        const key = `monthly-${empId}`;
+        setUpdatingCells(prev => ({ ...prev, [key]: true }));
+        try {
+            let val = amount === "" ? 0 : parseFloat(amount);
+            if (val > 1000000) val = 1000000;
+            await logMonthlyAdvance(empId, currentDate.getFullYear(), currentDate.getMonth(), val);
+            onUpdate();
+        } finally {
+            setUpdatingCells(prev => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+        }
     };
 
     const handleAdvanceChange = async (empId: number, dateObj: Date, amount: string) => {
         if (role !== "admin") return;
         const dateStr = dateObj.toISOString().split("T")[0];
-        let val = amount === "" ? 0 : parseFloat(amount);
-        if (val > 1000000) val = 1000000;
-        await logAdvance(empId, dateStr, val);
-        onUpdate();
+        const key = `adv-${empId}-${dateStr}`;
+        setUpdatingCells(prev => ({ ...prev, [key]: true }));
+
+        try {
+            let val = amount === "" ? 0 : parseFloat(amount);
+            if (val > 1000000) val = 1000000;
+            await logAdvance(empId, dateStr, val);
+            onUpdate();
+        } finally {
+            setUpdatingCells(prev => {
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            });
+        }
     };
 
     return (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm max-h-[70vh] flex flex-col">
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm max-h-[70vh] flex flex-col relative">
+            {loading && (
+                <div className="absolute inset-0 z-50 bg-white/50 backdrop-blur-[1px] flex items-center justify-center">
+                    <Spinner size={40} className="text-blue-600" />
+                </div>
+            )}
             <div className="overflow-auto no-scrollbar relative">
                 <table className="w-full border-collapse">
                     <thead className="sticky top-0 z-40 bg-gray-100">
@@ -170,17 +190,23 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
                                     m.month === currentDate.getMonth()
                                 );
                                 return (
-                                    <td key={emp.id} className="p-1.5 border-r border-blue-100 bg-blue-50/10">
-                                        <input
-                                            key={`${emp.id}-${currentDate.getMonth()}-${currentDate.getFullYear()}`}
-                                            disabled={role !== "admin"}
-                                            type="number"
-                                            max={1000000}
-                                            placeholder="0"
-                                            className="w-full text-[11px] py-1 px-1.5 border-none focus:ring-1 focus:ring-blue-300 rounded bg-white transition-all font-black text-blue-700 shadow-sm"
-                                            defaultValue={mAdv ? mAdv.amount : ""}
-                                            onBlur={(e) => handleMonthlyAdvanceChange(emp.id, e.target.value)}
-                                        />
+                                    <td key={emp.id} className="p-1.5 border-r border-blue-100 bg-blue-50/10 relative">
+                                        {updatingCells[`monthly-${emp.id}`] ? (
+                                            <div className="w-full h-full flex items-center justify-center">
+                                                <Spinner size={16} />
+                                            </div>
+                                        ) : (
+                                            <input
+                                                key={`${emp.id}-${currentDate.getMonth()}-${currentDate.getFullYear()}`}
+                                                disabled={role !== "admin"}
+                                                type="number"
+                                                max={1000000}
+                                                placeholder="0"
+                                                className="w-full text-[11px] py-1 px-1.5 border-none focus:ring-1 focus:ring-blue-300 rounded bg-white transition-all font-black text-blue-700 shadow-sm"
+                                                defaultValue={mAdv ? mAdv.amount : ""}
+                                                onBlur={(e) => handleMonthlyAdvanceChange(emp.id, e.target.value)}
+                                            />
+                                        )}
                                     </td>
                                 );
                             })}
@@ -222,25 +248,31 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
                                             )}>
                                                 <div className="flex flex-col gap-1">
                                                     {/* Advance Input */}
-                                                    <div className="relative group">
-                                                        <input
-                                                            disabled={role !== "admin" || isFuture}
-                                                            type="number"
-                                                            max={1000000}
-                                                            placeholder="₹0"
-                                                            className={cn(
-                                                                "w-full text-[10px] py-1 px-1.5 border-none focus:ring-1 focus:ring-blue-300 rounded bg-white transition-all font-bold shadow-sm",
-                                                                advance > 0 && "bg-amber-100 text-amber-800",
-                                                                (role !== "admin" || isFuture) && "cursor-not-allowed opacity-50 shadow-none"
-                                                            )}
-                                                            defaultValue={advance || ""}
-                                                            onBlur={(e) => handleAdvanceChange(emp.id, dateObj, e.target.value)}
-                                                        />
+                                                    <div className="relative group min-h-[24px]">
+                                                        {updatingCells[`adv-${emp.id}-${dateStr}`] ? (
+                                                            <div className="absolute inset-0 flex items-center justify-center">
+                                                                <Spinner size={14} />
+                                                            </div>
+                                                        ) : (
+                                                            <input
+                                                                disabled={role !== "admin" || isFuture}
+                                                                type="number"
+                                                                max={1000000}
+                                                                placeholder="₹0"
+                                                                className={cn(
+                                                                    "w-full text-[10px] py-1 px-1.5 border-none focus:ring-1 focus:ring-blue-300 rounded bg-white transition-all font-bold shadow-sm",
+                                                                    advance > 0 && "bg-amber-100 text-amber-800",
+                                                                    (role !== "admin" || isFuture) && "cursor-not-allowed opacity-50 shadow-none"
+                                                                )}
+                                                                defaultValue={advance || ""}
+                                                                onBlur={(e) => handleAdvanceChange(emp.id, dateObj, e.target.value)}
+                                                            />
+                                                        )}
                                                     </div>
 
                                                     {/* Attendance Toggle */}
                                                     <button
-                                                        disabled={role !== "admin" || isFuture}
+                                                        disabled={role !== "admin" || isFuture || updatingCells[`${emp.id}-${dateStr}`]}
                                                         onClick={() => handleToggle(emp.id, dateObj)}
                                                         className={cn(
                                                             "w-full h-8 rounded-lg flex flex-col items-center justify-center transition-all",
@@ -253,12 +285,17 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
                                                                 : status
                                                                     ? "bg-rose-500 text-white font-black"
                                                                     : "bg-white text-slate-300 border border-slate-200 shadow-sm",
-                                                            (role !== "admin" || isFuture) && "cursor-default shadow-none opacity-50"
+                                                            (role !== "admin" || isFuture) && "cursor-default shadow-none opacity-50",
+                                                            updatingCells[`${emp.id}-${dateStr}`] && "opacity-80 cursor-wait"
                                                         )}
                                                     >
-                                                        <span className="text-[11px] font-black tracking-tighter">
-                                                            {isPresent ? (multiplier === 1 ? "X" : `x${multiplier}`) : status ? "0" : " "}
-                                                        </span>
+                                                        {updatingCells[`${emp.id}-${dateStr}`] ? (
+                                                            <Spinner size={16} className="text-current" />
+                                                        ) : (
+                                                            <span className="text-[11px] font-black tracking-tighter">
+                                                                {isPresent ? (multiplier === 1 ? "X" : `x${multiplier}`) : status ? "0" : " "}
+                                                            </span>
+                                                        )}
                                                     </button>
                                                 </div>
                                             </td>
