@@ -165,7 +165,11 @@ export default function ClientDetailView({
                         const data = getDailyData(date);
                         const dateObj = new Date(date);
                         return (
-                            <div key={date} className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between group">
+                            <div
+                                key={date}
+                                onClick={() => handleEdit(date)}
+                                className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between cursor-pointer active:scale-[0.99] transition-all"
+                            >
                                 <div className="flex items-center gap-4">
                                     <div className="bg-slate-50 px-3 py-2 rounded-xl text-center min-w-[50px] border border-slate-100">
                                         <div className="text-[11px] font-black text-slate-900 leading-none">{dateObj.getDate()}</div>
@@ -208,14 +212,20 @@ export default function ClientDetailView({
                                     {role === "admin" && (
                                         <div className="flex gap-1">
                                             <button
-                                                onClick={() => handleEdit(date)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleEdit(date);
+                                                }}
                                                 className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
                                                 title="Edit Entry"
                                             >
                                                 <Edit2 size={12} />
                                             </button>
                                             <button
-                                                onClick={() => setConfirmDeleteEntryDate(date)}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setConfirmDeleteEntryDate(date);
+                                                }}
                                                 className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                                                 title="Delete Entry"
                                             >

@@ -19,12 +19,7 @@ export default function CommonExpensesModal({ isOpen, onClose }: CommonExpensesM
 
     const [newName, setNewName] = useState("");
     const [newAmount, setNewAmount] = useState("");
-
-    const [editingId, setEditingId] = useState<number | null>(null);
-    const [editName, setEditName] = useState("");
-    const [editAmount, setEditAmount] = useState("");
-
-    const [deleteId, setDeleteId] = useState<number | null>(null);
+    const [showInputs, setShowInputs] = useState(false);
 
     const fetchData = async () => {
         setIsLoading(true);
@@ -49,47 +44,25 @@ export default function CommonExpensesModal({ isOpen, onClose }: CommonExpensesM
             await addCommonExpense(newName, parseFloat(newAmount));
             setNewName("");
             setNewAmount("");
+            setShowInputs(false);
             await fetchData();
         } catch (error) {
             console.error(error);
         } finally {
-            setIsSaving(true); // Wait, should be false
             setIsSaving(false);
         }
     };
 
-    const handleUpdate = async (id: number) => {
-        if (!editName || !editAmount) return;
+    const handleDelete = async (id: number) => {
         setIsSaving(true);
         try {
-            await updateCommonExpense(id, editName, parseFloat(editAmount));
-            setEditingId(null);
+            await deleteCommonExpense(id);
             await fetchData();
         } catch (error) {
             console.error(error);
         } finally {
             setIsSaving(false);
         }
-    };
-
-    const handleDelete = async () => {
-        if (deleteId === null) return;
-        setIsSaving(true);
-        try {
-            await deleteCommonExpense(deleteId);
-            setDeleteId(null);
-            await fetchData();
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setIsSaving(false);
-        }
-    };
-
-    const startEdit = (exp: any) => {
-        setEditingId(exp.id);
-        setEditName(exp.name);
-        setEditAmount(exp.amount.toString());
     };
 
     return (
@@ -121,41 +94,55 @@ export default function CommonExpensesModal({ isOpen, onClose }: CommonExpensesM
                             </div>
 
                             <div className="p-6 sm:p-8 space-y-6 sm:space-y-8 overflow-y-auto no-scrollbar">
-                                {/* Add New Form */}
-                                <div className="bg-blue-50/50 p-5 sm:p-6 rounded-[1.5rem] sm:rounded-[2rem] border border-blue-100/50 space-y-4">
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                        <div className="space-y-1.5">
-                                            <label className="text-[9px] font-black text-blue-400 uppercase tracking-widest ml-1">Expense Name</label>
-                                            <input
-                                                type="text"
-                                                placeholder="e.g. Petrol"
-                                                value={newName}
-                                                onChange={(e) => setNewName(e.target.value)}
-                                                className="w-full px-4 py-3 bg-white border border-blue-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-xs shadow-sm"
-                                            />
+                                {showInputs ? (
+                                    <div className="bg-blue-50/50 p-5 sm:p-6 rounded-[1.5rem] sm:rounded-[2rem] border border-blue-100/50 space-y-4">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <h4 className="text-[10px] font-black text-blue-500 uppercase tracking-widest px-1">Add New Expense</h4>
+                                            <button onClick={() => setShowInputs(false)} className="text-blue-400 hover:text-blue-600">
+                                                <X size={14} />
+                                            </button>
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[9px] font-black text-blue-400 uppercase tracking-widest ml-1">Amount</label>
-                                            <div className="relative">
-                                                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-300 font-bold text-xs">₹</span>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[9px] font-black text-blue-400 uppercase tracking-widest ml-1">Expense Name</label>
                                                 <input
-                                                    type="number"
-                                                    placeholder="0"
-                                                    value={newAmount}
-                                                    onChange={(e) => setNewAmount(e.target.value)}
-                                                    className="w-full pl-7 pr-4 py-3 bg-white border border-blue-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-xs shadow-sm"
+                                                    type="text"
+                                                    placeholder="e.g. Petrol"
+                                                    value={newName}
+                                                    onChange={(e) => setNewName(e.target.value)}
+                                                    className="w-full px-4 py-3 bg-white border border-blue-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-xs shadow-sm"
                                                 />
                                             </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[9px] font-black text-blue-400 uppercase tracking-widest ml-1">Amount</label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-300 font-bold text-xs">₹</span>
+                                                    <input
+                                                        type="number"
+                                                        placeholder="0"
+                                                        value={newAmount}
+                                                        onChange={(e) => setNewAmount(e.target.value)}
+                                                        className="w-full pl-7 pr-4 py-3 bg-white border border-blue-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-xs shadow-sm"
+                                                    />
+                                                </div>
+                                            </div>
                                         </div>
+                                        <button
+                                            onClick={handleAdd}
+                                            disabled={!newName || !newAmount || isSaving}
+                                            className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-200 text-[10px] uppercase tracking-[0.2em] hover:bg-blue-700 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                                        >
+                                            <Plus size={16} /> Add to Global List
+                                        </button>
                                     </div>
+                                ) : (
                                     <button
-                                        onClick={handleAdd}
-                                        disabled={!newName || !newAmount || isSaving}
-                                        className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl shadow-xl shadow-blue-200 text-[10px] uppercase tracking-[0.2em] hover:bg-blue-700 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                                        onClick={() => setShowInputs(true)}
+                                        className="w-full py-4 bg-white border-2 border-dashed border-blue-100 text-blue-500 font-black rounded-[1.5rem] sm:rounded-[2rem] text-[10px] uppercase tracking-[0.2em] hover:bg-blue-50 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                                     >
-                                        <Plus size={16} /> Add to Global List
+                                        <Plus size={16} /> Add New Expense
                                     </button>
-                                </div>
+                                )}
 
                                 {/* List */}
                                 <div className="space-y-3">
@@ -169,44 +156,19 @@ export default function CommonExpensesModal({ isOpen, onClose }: CommonExpensesM
                                     ) : (
                                         <div className="space-y-3">
                                             {expenses.map((exp) => (
-                                                <div key={exp.id} className="group bg-white p-4 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all flex items-center justify-between">
-                                                    {editingId === exp.id ? (
-                                                        <div className="flex gap-2 flex-1 mr-2">
-                                                            <input
-                                                                type="text"
-                                                                value={editName}
-                                                                onChange={(e) => setEditName(e.target.value)}
-                                                                className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none"
-                                                            />
-                                                            <input
-                                                                type="number"
-                                                                value={editAmount}
-                                                                onChange={(e) => setEditAmount(e.target.value)}
-                                                                className="w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none"
-                                                            />
-                                                            <button onClick={() => handleUpdate(exp.id)} className="p-2 bg-emerald-500 text-white rounded-xl shadow-lg shadow-emerald-100">
-                                                                <Check size={16} />
-                                                            </button>
-                                                            <button onClick={() => setEditingId(null)} className="p-2 bg-slate-100 text-slate-400 rounded-xl">
-                                                                <X size={16} />
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <>
-                                                            <div className="flex flex-col">
-                                                                <span className="text-sm font-black text-slate-800">{exp.name}</span>
-                                                                <span className="text-[10px] font-black text-blue-500 italic">₹{parseFloat(exp.amount).toLocaleString()}</span>
-                                                            </div>
-                                                            <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <button onClick={() => startEdit(exp)} className="p-2 bg-slate-50 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
-                                                                    <Edit2 size={16} />
-                                                                </button>
-                                                                <button onClick={() => setDeleteId(exp.id)} className="p-2 bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all">
-                                                                    <Trash2 size={16} />
-                                                                </button>
-                                                            </div>
-                                                        </>
-                                                    )}
+                                                <div key={exp.id} className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex items-center justify-between">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-black text-slate-800">{exp.name}</span>
+                                                        <span className="text-[10px] font-black text-blue-500 italic">₹{parseFloat(exp.amount).toLocaleString()}</span>
+                                                    </div>
+                                                    <div className="flex gap-1.5 transition-opacity">
+                                                        <button
+                                                            onClick={() => handleDelete(exp.id)}
+                                                            className="p-2  text-slate-400 bg-rose-50 rounded-xl transition-all"
+                                                        >
+                                                            <Trash2 size={16} color="red" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -217,15 +179,6 @@ export default function CommonExpensesModal({ isOpen, onClose }: CommonExpensesM
                     </div>
                 )}
             </AnimatePresence>
-
-            <ConfirmModal
-                isOpen={deleteId !== null}
-                onClose={() => setDeleteId(null)}
-                onConfirm={handleDelete}
-                title="Delete Preset?"
-                message="This common expense will no longer appear in the quick-select list. Existing project entries using it won't be affected."
-                confirmText="Delete Preset"
-            />
         </>
     );
 }
