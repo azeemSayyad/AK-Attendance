@@ -8,6 +8,8 @@ import { updateWorkforce, logClientMoney, deleteProjectEntry } from "@/actions/c
 import { addProjectExpense, deleteProjectExpense } from "@/actions/expenses";
 import { Trash2 } from "lucide-react";
 import { Spinner } from "@/components/ui/Spinner";
+import ConfirmModal from "./ConfirmModal";
+import ExpenseSelectorModal from "./ExpenseSelectorModal";
 
 interface ProjectEntryModalProps {
     isOpen: boolean;
@@ -139,10 +141,9 @@ export default function ProjectEntryModal({
     const [expenses, setExpenses] = useState<{ id?: number, name: string, amount: string }[]>(
         initialExpenses.map(e => ({ ...e, amount: e.amount.toString() }))
     );
-    const [newExpenseName, setNewExpenseName] = useState("");
-    const [newExpenseAmount, setNewExpenseAmount] = useState("");
     const [loading, setLoading] = useState(false);
     const [isWorkforceModalOpen, setIsWorkforceModalOpen] = useState(false);
+    const [isExpenseSelectorOpen, setIsExpenseSelectorOpen] = useState(false);
     const [showConfirmDeleteEntry, setShowConfirmDeleteEntry] = useState(false);
     const [confirmExpenseIndex, setConfirmExpenseIndex] = useState<number | null>(null);
 
@@ -157,8 +158,6 @@ export default function ProjectEntryModal({
             setSelectedEmps(initialEmployees);
             setMoney(initialMoney.toString());
             setExpenses(initialExpenses.map(e => ({ ...e, amount: e.amount.toString() })));
-            setNewExpenseName("");
-            setNewExpenseAmount("");
         }
     }, [isOpen, initialDate, empsKey, initialMoney, expensesKey]);
 
@@ -219,11 +218,12 @@ export default function ProjectEntryModal({
         }
     };
 
-    const addExpense = () => {
-        if (!newExpenseName || !newExpenseAmount) return;
-        setExpenses([...expenses, { name: newExpenseName, amount: newExpenseAmount }]);
-        setNewExpenseName("");
-        setNewExpenseAmount("");
+    const handleExpenseBatchSelect = (selected: { name: string; amount: number }[]) => {
+        const newBatch = selected.map(s => ({
+            name: s.name,
+            amount: s.amount.toString()
+        }));
+        setExpenses(prev => [...prev, ...newBatch]);
     };
 
     const removeExpense = async (index: number) => {
@@ -275,7 +275,7 @@ export default function ProjectEntryModal({
                             initial={{ opacity: 0, scale: 0.9, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
                             exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-md bg-white rounded-3xl shadow-2xl z-[101] overflow-hidden"
+                            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-md bg-white rounded-[2rem] sm:rounded-3xl shadow-2xl z-[101] overflow-hidden"
                         >
                             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                                 <h2 className="text-base font-black text-slate-900 uppercase tracking-tight">Project Entry</h2>
@@ -339,31 +339,15 @@ export default function ProjectEntryModal({
 
                                 {/* Expenses Section */}
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                        <IndianRupee size={12} /> Add Expenses
-                                    </label>
-
-                                    <div className="flex gap-2 flex-col">
-                                        <input
-                                            type="text"
-                                            placeholder="Item Name (e.g. Petrol)"
-                                            value={newExpenseName}
-                                            onChange={(e) => setNewExpenseName(e.target.value)}
-                                            className="flex-[2] px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
-                                        <input
-                                            type="number"
-                                            placeholder="Amount"
-                                            value={newExpenseAmount}
-                                            onChange={(e) => setNewExpenseAmount(e.target.value)}
-                                            className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
-                                        />
+                                    <div className="flex justify-between items-center px-1">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                            <IndianRupee size={12} /> Expenses
+                                        </label>
                                         <button
-                                            onClick={addExpense}
-                                            disabled={!newExpenseName || !newExpenseAmount}
-                                            className="bg-blue-600 text-white p-2 rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                            onClick={() => setIsExpenseSelectorOpen(true)}
+                                            className="text-[10px] font-black text-rose-600 bg-rose-50 px-3 py-1.5 rounded-xl flex items-center gap-1.5 hover:bg-rose-100 transition-all uppercase tracking-widest shadow-sm"
                                         >
-                                            <Plus size={16} />
+                                            <Plus size={14} /> Add Expense
                                         </button>
                                     </div>
 
@@ -460,39 +444,29 @@ export default function ProjectEntryModal({
                 onSelect={setSelectedEmps}
             />
 
-            {/* Confirm Delete Entry Modal */}
-            <AnimatePresence>
-                {showConfirmDeleteEntry && (
-                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowConfirmDeleteEntry(false)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
-                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white w-full max-w-sm rounded-[1.2rem] shadow-2xl p-6">
-                            <h3 className="text-lg font-black text-slate-900">Delete Project Entry</h3>
-                            <p className="text-sm text-slate-500 mt-2">This will remove all workforce, expenses, and money records for <span className="font-bold">{date}</span>. This action cannot be undone.</p>
-                            <div className="mt-4 flex gap-3">
-                                <button onClick={() => setShowConfirmDeleteEntry(false)} className="flex-1 py-3 bg-white border border-slate-200 rounded-2xl font-bold">Cancel</button>
-                                <button onClick={confirmDeleteEntry} className="flex-1 py-3 bg-red-600 text-white rounded-2xl font-black">Delete</button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            <ExpenseSelectorModal
+                isOpen={isExpenseSelectorOpen}
+                onClose={() => setIsExpenseSelectorOpen(false)}
+                onSelect={handleExpenseBatchSelect}
+            />
 
-            {/* Confirm Delete Expense Modal */}
-            <AnimatePresence>
-                {confirmExpenseIndex !== null && (
-                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setConfirmExpenseIndex(null)} className="absolute inset-0 bg-slate-900/60 backdrop-blur-md" />
-                        <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white w-full max-w-sm rounded-[1.2rem] shadow-2xl p-6">
-                            <h3 className="text-lg font-black text-slate-900">Delete Expense</h3>
-                            <p className="text-sm text-slate-500 mt-2">Are you sure you want to delete this expense? This action cannot be undone.</p>
-                            <div className="mt-4 flex gap-3">
-                                <button onClick={() => setConfirmExpenseIndex(null)} className="flex-1 py-3 bg-white border border-slate-200 rounded-2xl font-bold">Cancel</button>
-                                <button onClick={confirmDeleteExpense} className="flex-1 py-3 bg-red-600 text-white rounded-2xl font-black">Delete</button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+            <ConfirmModal
+                isOpen={showConfirmDeleteEntry}
+                onClose={() => setShowConfirmDeleteEntry(false)}
+                onConfirm={confirmDeleteEntry}
+                title="Delete Project Entry"
+                message={`This will remove all workforce, expenses, and money records for ${date}. This action cannot be undone.`}
+                confirmText="Delete"
+            />
+
+            <ConfirmModal
+                isOpen={confirmExpenseIndex !== null}
+                onClose={() => setConfirmExpenseIndex(null)}
+                onConfirm={confirmDeleteExpense}
+                title="Delete Expense"
+                message="Are you sure you want to delete this expense? This action cannot be undone."
+                confirmText="Delete"
+            />
         </>
     );
 }

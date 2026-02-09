@@ -16,7 +16,7 @@ interface AttendanceGridProps {
     onUpdate: () => void;
     onEmployeeClick: (employee: any) => void;
     loading?: boolean;
-    onPendingChangesChange?: (has: boolean, saveFn: () => void, isSaving: boolean) => void;
+    onPendingChangesChange?: (has: boolean, saveFn: () => void, isSaving: boolean, resetFn: () => void) => void;
 }
 
 const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -102,9 +102,20 @@ export default function AttendanceGrid({ role, employees, attendance, advances, 
         }
     };
 
+    // Clear all local pending changes
+    const resetChanges = () => {
+        setLocalAttendance({});
+        setLocalAdvances({});
+        setLocalMonthlyAdvances({});
+        localAttendanceRef.current = {};
+        localAdvancesRef.current = {};
+        localMonthlyAdvancesRef.current = {};
+        if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+
     // Notify parent when pending state or saving state changes
     React.useEffect(() => {
-        if (onPendingChangesChange) onPendingChangesChange(hasPendingChanges, saveAllChanges, isSaving);
+        if (onPendingChangesChange) onPendingChangesChange(hasPendingChanges, saveAllChanges, isSaving, resetChanges);
     }, [hasPendingChanges, isSaving]);
 
     // Warn before unloading if unsaved

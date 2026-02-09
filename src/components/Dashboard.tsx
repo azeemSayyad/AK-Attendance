@@ -15,6 +15,7 @@ import ClientModal from "@/components/ClientModal";
 import ClientCard from "@/components/ClientCard";
 import ClientDetailView from "@/components/ClientDetailView";
 import ChangePinModal from "@/components/ChangePinModal";
+import CommonExpensesModal from "@/components/CommonExpensesModal";
 import { Download, Building2, Users as UsersIcon, Wallet, Briefcase, Settings } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -36,11 +37,13 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
     const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
     const [isChangePinModalOpen, setIsChangePinModalOpen] = useState(false);
+    const [isCommonExpensesModalOpen, setIsCommonExpensesModalOpen] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState<any | null>(null);
     const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
     const [gridHasPending, setGridHasPending] = useState(false);
     const [gridSaveFn, setGridSaveFn] = useState<(() => void) | null>(null);
+    const [gridResetFn, setGridResetFn] = useState<(() => void) | null>(null);
     const [gridIsSaving, setGridIsSaving] = useState(false);
 
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
@@ -217,6 +220,15 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                                 <Settings size={18} />
                             </button>
                         )}
+                        {role === "admin" && (
+                            <button
+                                onClick={() => setIsCommonExpensesModalOpen(true)}
+                                className="p-2 text-slate-500 hover:text-blue-600 transition-colors bg-slate-50 rounded-xl"
+                                title="Manage Common Expenses"
+                            >
+                                <Wallet size={18} />
+                            </button>
+                        )}
                         <button
                             onClick={fetchData}
                             disabled={isLoading}
@@ -326,7 +338,7 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
 
                         {/* Save Updates button under search bar (positioned here so it's visually below the search) */}
                         {role === "admin" && gridHasPending && (
-                            <div className="mt-3 flex">
+                            <div className="mt-3 flex gap-2">
                                 <button
                                     onClick={async () => {
                                         console.debug("Dashboard Save clicked", { gridHasPending, hasFn: !!gridSaveFn });
@@ -337,10 +349,20 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                                         }
                                     }}
                                     disabled={gridIsSaving}
-                                    className="flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-sm bg-gradient-to-r from-indigo-500 via-blue-600 to-purple-600 text-white shadow-lg hover:opacity-90 active:scale-95"
+                                    className="flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-sm bg-gradient-to-r from-indigo-500 via-blue-600 to-purple-600 text-white shadow-lg hover:opacity-90 active:scale-95 disabled:opacity-50"
                                 >
                                     {gridIsSaving ? <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save size={16} />}
                                     {gridIsSaving ? "Saving..." : "Save Updates"}
+                                </button>
+
+                                <button
+                                    onClick={() => {
+                                        if (gridResetFn) gridResetFn();
+                                    }}
+                                    disabled={gridIsSaving}
+                                    className="flex items-center gap-2 px-4 py-2 rounded-2xl font-black text-sm bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200 active:scale-95 transition-all disabled:opacity-50"
+                                >
+                                    Reset
                                 </button>
                             </div>
                         )}
@@ -355,9 +377,10 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                                 monthlyAdvances={monthlyAdvances}
                                 currentDate={currentDate}
                                 onUpdate={fetchData}
-                                onPendingChangesChange={(has, saveFn, isSaving) => {
+                                onPendingChangesChange={(has, saveFn, isSaving, resetFn) => {
                                     setGridHasPending(has);
                                     setGridSaveFn(() => saveFn);
+                                    setGridResetFn(() => resetFn);
                                     setGridIsSaving(isSaving);
                                 }}
                                 onEmployeeClick={handleEmployeeClick}
@@ -524,6 +547,11 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
             <ChangePinModal
                 isOpen={isChangePinModalOpen}
                 onClose={() => setIsChangePinModalOpen(false)}
+            />
+
+            <CommonExpensesModal
+                isOpen={isCommonExpensesModalOpen}
+                onClose={() => setIsCommonExpensesModalOpen(false)}
             />
 
             <EmployeeSummarySheet

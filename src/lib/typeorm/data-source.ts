@@ -9,13 +9,14 @@ import { MoneyTaken } from "./entities/MoneyTaken";
 import { MonthlyAdvance } from "./entities/MonthlyAdvance";
 import { SystemSettings } from "./entities/SystemSettings";
 import { ProjectExpense } from "./entities/ProjectExpense";
+import { CommonExpense } from "./entities/CommonExpense";
 
 export const AppDataSource = new DataSource({
     type: "postgres",
     url: process.env.DATABASE_URL || "postgresql://postgres:postgres@localhost:5432/ak-attendance",
     synchronize: true, // Auto-create tables for dev
     logging: false,
-    entities: [Employee, Attendance, Advance, Client, WorkAssignment, MoneyTaken, MonthlyAdvance, SystemSettings, ProjectExpense],
+    entities: [Employee, Attendance, Advance, Client, WorkAssignment, MoneyTaken, MonthlyAdvance, SystemSettings, ProjectExpense, CommonExpense],
     migrations: [],
     subscribers: [],
     ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,

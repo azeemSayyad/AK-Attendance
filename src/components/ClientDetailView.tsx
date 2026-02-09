@@ -32,6 +32,7 @@ export default function ClientDetailView({
     const [editingEntry, setEditingEntry] = useState<any>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+    const [confirmDeleteEntryDate, setConfirmDeleteEntryDate] = useState<string | null>(null);
 
     const handleDeleteClient = async () => {
         setIsDeleting(true);
@@ -214,17 +215,7 @@ export default function ClientDetailView({
                                                 <Edit2 size={12} />
                                             </button>
                                             <button
-                                                onClick={async () => {
-                                                    if (confirm(`Delete all entries for ${new Date(date).toLocaleDateString()}? This will remove all workforce, expenses, and money records for this date.`)) {
-                                                        try {
-                                                            await deleteProjectEntry(client.id, date);
-                                                            onUpdate();
-                                                        } catch (err) {
-                                                            console.error(err);
-                                                            alert("Failed to delete entry. Please try again.");
-                                                        }
-                                                    }
-                                                }}
+                                                onClick={() => setConfirmDeleteEntryDate(date)}
                                                 className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                                                 title="Delete Entry"
                                             >
@@ -273,6 +264,24 @@ export default function ClientDetailView({
                 title="Delete Project?"
                 message={`Are you sure you want to delete "${client.name}"? This will permanently remove all logs, attendance assignments, and financial records for this site.`}
                 confirmText={isDeleting ? "Deleting..." : "Delete Site"}
+            />
+
+            <ConfirmModal
+                isOpen={!!confirmDeleteEntryDate}
+                onClose={() => setConfirmDeleteEntryDate(null)}
+                onConfirm={async () => {
+                    if (!confirmDeleteEntryDate) return;
+                    try {
+                        await deleteProjectEntry(client.id, confirmDeleteEntryDate);
+                        onUpdate();
+                    } catch (err) {
+                        console.error(err);
+                        alert("Failed to delete entry. Please try again.");
+                    }
+                }}
+                title="Delete Entry?"
+                message={`Delete all entries for ${confirmDeleteEntryDate ? new Date(confirmDeleteEntryDate).toLocaleDateString() : ""}? This will remove all workforce, expenses, and money records for this date.`}
+                confirmText="Delete Entry"
             />
         </div>
     );
