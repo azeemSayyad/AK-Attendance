@@ -3,8 +3,10 @@
 import { getDataSource } from "@/lib/typeorm/data-source";
 import { ProjectExpense } from "@/lib/typeorm/entities/ProjectExpense";
 import { revalidatePath } from "next/cache";
+import { requireTenant } from "./auth";
 
 export async function addProjectExpense(clientId: number, date: string, name: string, amount: number) {
+    const tenantId = await requireTenant();
     const ds = await getDataSource();
     const repo = ds.getRepository(ProjectExpense);
 
@@ -12,7 +14,8 @@ export async function addProjectExpense(clientId: number, date: string, name: st
         clientId,
         date,
         name,
-        amount
+        amount,
+        tenantId,
     });
 
     await repo.save(expense);
@@ -21,16 +24,18 @@ export async function addProjectExpense(clientId: number, date: string, name: st
 }
 
 export async function deleteProjectExpense(id: number) {
+    const tenantId = await requireTenant();
     const ds = await getDataSource();
     const repo = ds.getRepository(ProjectExpense);
-    await repo.delete(id);
+    await repo.delete({ id, tenantId });
     revalidatePath("/");
     return { success: true };
 }
 
 export async function getProjectExpenses(clientId: number) {
+    const tenantId = await requireTenant();
     const ds = await getDataSource();
     const repo = ds.getRepository(ProjectExpense);
-    const expenses = await repo.find({ where: { clientId }, order: { date: "DESC" } });
+    const expenses = await repo.find({ where: { clientId, tenantId }, order: { date: "DESC" } });
     return JSON.parse(JSON.stringify(expenses));
 }

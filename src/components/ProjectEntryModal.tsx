@@ -33,24 +33,45 @@ function WorkforceSelectorModal({
     onClose,
     employees,
     selectedIds,
-    onSelect
+    onSelect,
+    casualWorkers = [],
+    onAddCasualWorker,
+    onRemoveCasualWorker = () => {}
 }: {
     isOpen: boolean;
     onClose: () => void;
     employees: any[];
     selectedIds: number[];
     onSelect: (ids: number[]) => void;
+    casualWorkers?: { name: string; amount: string }[];
+    onAddCasualWorker: (name: string, amount: number) => void;
+    onRemoveCasualWorker?: (index: number) => void;
 }) {
     const [tempSelected, setTempSelected] = useState<number[]>(selectedIds);
+    const [casualName, setCasualName] = useState("");
+    const [casualAmount, setCasualAmount] = useState("");
 
     useEffect(() => {
-        if (isOpen) setTempSelected(selectedIds);
+        if (isOpen) {
+            setTempSelected(selectedIds);
+            setCasualName("");
+            setCasualAmount("");
+        }
     }, [isOpen, selectedIds]);
 
     const toggle = (id: number) => {
         setTempSelected(prev =>
             prev.includes(id) ? prev.filter(e => e !== id) : [...prev, id]
         );
+    };
+
+    const handleAddCasual = () => {
+        const name = casualName.trim();
+        const amount = parseFloat(casualAmount);
+        if (!name || !amount || amount <= 0) return;
+        onAddCasualWorker(name, amount);
+        setCasualName("");
+        setCasualAmount("");
     };
 
     return (
@@ -104,7 +125,58 @@ function WorkforceSelectorModal({
                                 </button>
                             ))}
                         </div>
-                        <div className="p-6 bg-slate-50 border-t border-slate-100">
+                        <div className="px-4 pb-2 pt-3 border-t border-slate-100">
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2 px-1">Add one-off worker (adds to expenses only)</p>
+
+                            {casualWorkers.length > 0 && (
+                                <div className="mb-2 space-y-1.5">
+                                    {casualWorkers.map((w, i) => (
+                                        <div key={i} className="flex items-center justify-between bg-rose-50 border border-rose-100 rounded-xl px-3 py-2">
+                                            <span className="text-xs font-bold text-rose-700 truncate">{w.name}</span>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <span className="text-xs font-black text-rose-600">₹{(parseFloat(w.amount) || 0).toLocaleString()}</span>
+                                                <button onClick={() => onRemoveCasualWorker(i)} className="text-rose-400 hover:text-rose-600 p-0.5">
+                                                    <X size={13} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div className="text-right text-[9px] font-black text-rose-400 uppercase tracking-widest pr-1">
+                                        One-off total: ₹{casualWorkers.reduce((a, c) => a + (parseFloat(c.amount) || 0), 0).toLocaleString()}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={casualName}
+                                    onChange={(e) => setCasualName(e.target.value)}
+                                    placeholder="Name"
+                                    className="flex-[2] min-w-0 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-xs"
+                                />
+                                <div className="relative flex-1 min-w-0">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                                    <input
+                                        type="number"
+                                        value={casualAmount}
+                                        onChange={(e) => setCasualAmount(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === "Enter") handleAddCasual(); }}
+                                        placeholder="0"
+                                        className="w-full pl-6 pr-2 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-xs [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                    />
+                                </div>
+                                <button
+                                    onClick={handleAddCasual}
+                                    disabled={!casualName.trim() || !parseFloat(casualAmount)}
+                                    className="shrink-0 p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                    title="Add worker to expenses"
+                                >
+                                    <Plus size={16} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="p-6 pt-3 bg-slate-50 border-t border-slate-100">
                             <button
                                 onClick={() => {
                                     onSelect(tempSelected);
@@ -141,6 +213,7 @@ export default function ProjectEntryModal({
     const [expenses, setExpenses] = useState<{ id?: number, name: string, amount: string }[]>(
         initialExpenses.map(e => ({ ...e, amount: e.amount.toString() }))
     );
+    const [casualWorkers, setCasualWorkers] = useState<{ name: string; amount: string }[]>([]);
     const [loading, setLoading] = useState(false);
     const [isWorkforceModalOpen, setIsWorkforceModalOpen] = useState(false);
     const [isExpenseSelectorOpen, setIsExpenseSelectorOpen] = useState(false);
@@ -158,6 +231,7 @@ export default function ProjectEntryModal({
             setSelectedEmps(initialEmployees);
             setMoney(initialMoney.toString());
             setExpenses(initialExpenses.map(e => ({ ...e, amount: e.amount.toString() })));
+            setCasualWorkers([]);
         }
     }, [isOpen, initialDate, empsKey, initialMoney, expensesKey]);
 
@@ -167,6 +241,10 @@ export default function ProjectEntryModal({
             const emp = employees.find(e => e.id === id);
             return acc + (emp ? parseFloat(emp.dailyWage) : 0);
         }, 0);
+    };
+
+    const calculateCasualTotal = () => {
+        return casualWorkers.reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
     };
 
     const handleSave = async () => {
@@ -184,6 +262,13 @@ export default function ProjectEntryModal({
             for (const exp of expenses) {
                 if (!exp.id && exp.name && exp.amount) {
                     await addProjectExpense(clientId, date, exp.name, parseFloat(exp.amount));
+                }
+            }
+
+            // Save one-off (casual) workers as project expenses
+            for (const w of casualWorkers) {
+                if (w.name && parseFloat(w.amount) > 0) {
+                    await addProjectExpense(clientId, date, w.name, parseFloat(w.amount));
                 }
             }
 
@@ -325,15 +410,32 @@ export default function ProjectEntryModal({
                                                 );
                                             })}
                                         </div>
-                                    ) : (
+                                    ) : casualWorkers.length === 0 ? (
                                         <div className="py-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-center">
                                             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">No staff selected</p>
+                                        </div>
+                                    ) : null}
+
+                                    {casualWorkers.length > 0 && (
+                                        <div className="grid grid-cols-2 gap-2 animate-in fade-in zoom-in-95 duration-200">
+                                            {casualWorkers.map((w, i) => (
+                                                <div key={`casual-${i}`} className="bg-rose-50 px-3 py-2 rounded-2xl border border-rose-100 flex flex-col relative">
+                                                    <span className="text-xs font-bold text-rose-700 truncate pr-4">{w.name}</span>
+                                                    <span className="text-[8px] text-rose-400 font-bold">₹{(parseFloat(w.amount) || 0).toLocaleString()} · One-off</span>
+                                                    <button
+                                                        onClick={() => setCasualWorkers(prev => prev.filter((_, idx) => idx !== i))}
+                                                        className="absolute top-1.5 right-1.5 text-rose-300 hover:text-rose-600"
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
 
                                     <div className="p-3 bg-blue-50/50 rounded-2xl border border-blue-100/50 flex justify-between items-center">
                                         <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">Total Daily Cost</span>
-                                        <span className="text-sm font-black text-blue-600">₹{(calculateTotalCost() + calculateTotalExpenses()).toLocaleString()}</span>
+                                        <span className="text-sm font-black text-blue-600">₹{(calculateTotalCost() + calculateTotalExpenses() + calculateCasualTotal()).toLocaleString()}</span>
                                     </div>
                                 </div>
 
@@ -442,6 +544,13 @@ export default function ProjectEntryModal({
                 employees={employees}
                 selectedIds={selectedEmps}
                 onSelect={setSelectedEmps}
+                casualWorkers={casualWorkers}
+                onAddCasualWorker={(name, amount) =>
+                    setCasualWorkers(prev => [...prev, { name, amount: amount.toString() }])
+                }
+                onRemoveCasualWorker={(index) =>
+                    setCasualWorkers(prev => prev.filter((_, i) => i !== index))
+                }
             />
 
             <ExpenseSelectorModal

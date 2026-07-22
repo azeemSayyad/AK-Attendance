@@ -6,6 +6,9 @@ export class MoneyTaken {
     @PrimaryGeneratedColumn()
     id!: number;
 
+    @Column({ name: "tenant_id", nullable: true })
+    tenantId?: number;
+
     @Column({ type: "date" })
     date!: string;
 

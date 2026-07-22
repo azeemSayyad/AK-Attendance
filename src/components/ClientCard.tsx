@@ -1,5 +1,5 @@
 import React from "react";
-import { Building2, IndianRupee, ChevronRight, TrendingUp } from "lucide-react";
+import { Building2, ChevronRight, TrendingUp, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface ClientCardProps {
@@ -7,16 +7,20 @@ interface ClientCardProps {
     totalCost: number;
     moneyTaken: number;
     onClick: () => void;
+    onDelete?: () => void;
 }
 
-export default function ClientCard({ client, totalCost, moneyTaken, onClick }: ClientCardProps) {
+export default function ClientCard({ client, totalCost, moneyTaken, onClick, onDelete }: ClientCardProps) {
     const balance = moneyTaken - totalCost;
     const isPositive = balance >= 0;
 
     return (
-        <button
+        <div
+            role="button"
+            tabIndex={0}
             onClick={onClick}
-            className="w-full bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all group flex flex-col gap-3 text-left"
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && onClick()}
+            className="w-full bg-white p-4 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-blue-200 transition-all group flex flex-col gap-3 text-left cursor-pointer"
         >
             <div className="flex justify-between items-start">
                 <div className="flex items-center gap-3">
@@ -28,7 +32,18 @@ export default function ClientCard({ client, totalCost, moneyTaken, onClick }: C
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{client.location}</p>
                     </div>
                 </div>
-                <ChevronRight className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" size={20} />
+                <div className="flex items-center gap-2">
+                    {onDelete && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-rose-50 text-rose-500 hover:bg-rose-100 border border-rose-100 transition-colors text-[10px] font-black uppercase tracking-widest"
+                            title="Delete project"
+                        >
+                            <Trash2 size={14} /> Delete
+                        </button>
+                    )}
+                    <ChevronRight className="text-slate-300 group-hover:text-blue-500 group-hover:translate-x-1 transition-all" size={20} />
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2 mt-1">
@@ -54,6 +69,6 @@ export default function ClientCard({ client, totalCost, moneyTaken, onClick }: C
                 </div>
                 <span className="text-xs font-black">₹{Math.abs(balance).toLocaleString()}</span>
             </div>
-        </button>
+        </div>
     );
 }

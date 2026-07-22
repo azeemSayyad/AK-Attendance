@@ -7,6 +7,9 @@ export class Client {
     @PrimaryGeneratedColumn()
     id!: number;
 
+    @Column({ name: "tenant_id", nullable: true })
+    tenantId?: number;
+
     @Column({ length: 15 })
     name!: string;
 

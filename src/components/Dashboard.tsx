@@ -10,17 +10,18 @@ import EmployeeSummarySheet from "@/components/EmployeeSummarySheet";
 import { Plus, Search, ChevronLeft, ChevronRight, LogOut, RefreshCw, Save } from "lucide-react";
 import { logout } from "@/actions/auth";
 import { cn } from "@/lib/utils";
-import { getClients, getClientMonthlyData } from "@/actions/clients";
+import { getClients, getClientMonthlyData, deleteClient } from "@/actions/clients";
 import ClientModal from "@/components/ClientModal";
 import ClientCard from "@/components/ClientCard";
 import ClientDetailView from "@/components/ClientDetailView";
 import ChangePinModal from "@/components/ChangePinModal";
+import ConfirmModal from "@/components/ConfirmModal";
 import CommonExpensesModal from "@/components/CommonExpensesModal";
 import { Download, Building2, Users as UsersIcon, Wallet, Briefcase, Settings } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
-export default function DashboardPage({ role, userId }: { role: string; userId?: string | null }) {
+export default function DashboardPage({ role, userId, tenantName }: { role: string; userId?: string | null; tenantName?: string | null }) {
     const [activeTab, setActiveTab] = useState<"staff" | "clients">("staff");
     const [employees, setEmployees] = useState<any[]>([]);
     const [attendanceData, setAttendanceData] = useState<any[]>([]);
@@ -32,6 +33,9 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
     const [monthlyAdvances, setMonthlyAdvances] = useState<any[]>([]);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [searchQuery, setSearchQuery] = useState("");
+    const [clientSearch, setClientSearch] = useState("");
+    const [clientFilter, setClientFilter] = useState<"all" | "profit" | "loss">("all");
+    const [clientToDelete, setClientToDelete] = useState<any | null>(null);
     const [isLoading, setIsLoading] = useState(true);
 
     const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
@@ -182,6 +186,38 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
     const totalClientsMoney = clientMoney.reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
     const clientsBalance = totalClientsMoney - totalClientsCost;
 
+    // Per-project cost/money/balance rows, with search + profit/loss filtering
+    const clientRows = clients.map(client => {
+        const clientAssignmentsList = clientAssignments.filter(a => a.clientId === client.id);
+        const clientMoneyList = clientMoney.filter(m => m.clientId === client.id);
+        const clientExpensesList = clientExpenses.filter(e => e.clientId === client.id);
+        const expensesTotal = clientExpensesList.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+        const cost = clientAssignmentsList.reduce((acc, curr) => acc + parseFloat(curr.employee.dailyWage), 0) + expensesTotal;
+        const money = clientMoneyList.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+        return { client, cost, money, balance: money - cost };
+    });
+
+    const visibleClientRows = clientRows.filter(({ client, balance }) => {
+        const q = clientSearch.trim().toLowerCase();
+        const matchesSearch = !q ||
+            client.name.toLowerCase().includes(q) ||
+            (client.location || "").toLowerCase().includes(q);
+        const matchesFilter =
+            clientFilter === "all" ||
+            (clientFilter === "profit" ? balance >= 0 : balance < 0);
+        return matchesSearch && matchesFilter;
+    });
+
+    const handleDeleteClient = async () => {
+        if (!clientToDelete) return;
+        try {
+            await deleteClient(clientToDelete.id);
+            await fetchData();
+        } catch (e) {
+            console.error("Failed to delete project", e);
+        }
+    };
+
     return (
         <main className="max-w-4xl mx-auto min-h-screen bg-slate-50 font-sans pb-10">
             {/* Row 1: Sticky Navbar */}
@@ -208,7 +244,7 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                     <span className={cn(
                         "text-[14px] px-2 py-1 rounded-lg font-bold uppercase tracking-wider bg-gray-100 text-blue-800"
                     )}>
-                        {role}
+                        {tenantName || role}
                     </span>
                     <div className="flex items-center gap-3">
                         {role === "admin" && (
@@ -237,13 +273,16 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                         >
                             <RefreshCw size={18} className={isLoading ? "animate-spin" : ""} />
                         </button>
-                        <button
-                            onClick={downloadPDF}
-                            className="p-2 text-slate-500 hover:text-blue-600 transition-colors bg-slate-50 rounded-xl"
-                            title="Download PDF"
-                        >
-                            <Download size={18} />
-                        </button>
+                        {/* Download PDF — hidden for now (kept for later use) */}
+                        {false && (
+                            <button
+                                onClick={downloadPDF}
+                                className="p-2 text-slate-500 hover:text-blue-600 transition-colors bg-slate-50 rounded-xl"
+                                title="Download PDF"
+                            >
+                                <Download size={18} />
+                            </button>
+                        )}
                         <button
                             onClick={() => logout()}
                             className="p-2 text-slate-400 hover:text-red-500 transition-colors bg-slate-50 rounded-xl"
@@ -278,29 +317,31 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                     </div>
                 )}
 
-                {/* Row 4: Month Navigation (Restricted) */}
-                <div className="flex items-center justify-between bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
-                    <button
-                        onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
-                    >
-                        <ChevronLeft size={20} />
-                    </button>
-                    <span className="font-black text-slate-700 uppercase tracking-tighter text-sm">
-                        {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-                    </span>
-                    <button
-                        disabled={(() => {
-                            const today = new Date();
-                            const diffMonths = (currentDate.getFullYear() - today.getFullYear()) * 12 + (currentDate.getMonth() - today.getMonth());
-                            return diffMonths >= 1;
-                        })()}
-                        onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))}
-                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-20 disabled:hover:bg-transparent rounded-xl transition-all"
-                    >
-                        <ChevronRight size={20} />
-                    </button>
-                </div>
+                {/* Row 4: Month Navigation — only on Staff view (attendance is monthly) */}
+                {activeTab === "staff" && (
+                    <div className="flex items-center justify-between bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
+                        <button
+                            onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1))}
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                        >
+                            <ChevronLeft size={20} />
+                        </button>
+                        <span className="font-black text-slate-700 uppercase tracking-tighter text-sm">
+                            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+                        </span>
+                        <button
+                            disabled={(() => {
+                                const today = new Date();
+                                const diffMonths = (currentDate.getFullYear() - today.getFullYear()) * 12 + (currentDate.getMonth() - today.getMonth());
+                                return diffMonths >= 1;
+                            })()}
+                            onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1))}
+                            className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-20 disabled:hover:bg-transparent rounded-xl transition-all"
+                        >
+                            <ChevronRight size={20} />
+                        </button>
+                    </div>
+                )}
 
                 {activeTab === "staff" ? (
                     <>
@@ -430,6 +471,45 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                                         <Plus size={16} /> Add Project
                                     </button>
                                 </div>
+
+                                {/* Search + Profit/Loss filters */}
+                                <div className="flex flex-col sm:flex-row gap-2">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <input
+                                            type="text"
+                                            placeholder="Search projects..."
+                                            className="w-full pl-10 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all shadow-sm text-sm"
+                                            value={clientSearch}
+                                            onChange={(e) => setClientSearch(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="flex bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
+                                        {([
+                                            { key: "all", label: "All" },
+                                            { key: "profit", label: "Profit" },
+                                            { key: "loss", label: "Loss" },
+                                        ] as const).map((f) => (
+                                            <button
+                                                key={f.key}
+                                                onClick={() => setClientFilter(f.key)}
+                                                className={cn(
+                                                    "flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all",
+                                                    clientFilter === f.key
+                                                        ? f.key === "profit"
+                                                            ? "bg-emerald-500 text-white shadow"
+                                                            : f.key === "loss"
+                                                                ? "bg-rose-500 text-white shadow"
+                                                                : "bg-slate-800 text-white shadow"
+                                                        : "text-slate-400 hover:text-slate-600"
+                                                )}
+                                            >
+                                                {f.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-1 gap-3">
                                     {isLoading ? (
                                         <div className="flex flex-col items-center justify-center py-20 bg-white rounded-3xl border border-slate-100">
@@ -438,29 +518,26 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
                                         </div>
                                     ) : (
                                         <>
-                                            {clients.map(client => {
-                                                const clientAssignmentsList = clientAssignments.filter(a => a.clientId === client.id);
-                                                const clientMoneyList = clientMoney.filter(m => m.clientId === client.id);
-                                                const clientExpensesList = clientExpenses.filter(e => e.clientId === client.id);
-
-                                                const expensesTotal = clientExpensesList.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
-                                                const cost = clientAssignmentsList.reduce((acc, curr) => acc + parseFloat(curr.employee.dailyWage), 0) + expensesTotal;
-                                                const money = clientMoneyList.reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
-
-                                                return (
-                                                    <ClientCard
-                                                        key={client.id}
-                                                        client={client}
-                                                        totalCost={cost}
-                                                        moneyTaken={money}
-                                                        onClick={() => setSelectedClientId(client.id)}
-                                                    />
-                                                );
-                                            })}
+                                            {visibleClientRows.map(({ client, cost, money }) => (
+                                                <ClientCard
+                                                    key={client.id}
+                                                    client={client}
+                                                    totalCost={cost}
+                                                    moneyTaken={money}
+                                                    onClick={() => setSelectedClientId(client.id)}
+                                                    onDelete={role === "admin" ? () => setClientToDelete(client) : undefined}
+                                                />
+                                            ))}
                                             {clients.length === 0 && (
                                                 <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200">
                                                     <Building2 className="mx-auto text-slate-300 mb-2" size={48} />
                                                     <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No project sites added yet.</p>
+                                                </div>
+                                            )}
+                                            {clients.length > 0 && visibleClientRows.length === 0 && (
+                                                <div className="text-center py-16 bg-white rounded-3xl border-2 border-dashed border-slate-200">
+                                                    <Search className="mx-auto text-slate-300 mb-2" size={40} />
+                                                    <p className="text-slate-400 font-bold uppercase text-[10px] tracking-widest">No matching projects.</p>
                                                 </div>
                                             )}
                                         </>
@@ -552,6 +629,17 @@ export default function DashboardPage({ role, userId }: { role: string; userId?:
             <CommonExpensesModal
                 isOpen={isCommonExpensesModalOpen}
                 onClose={() => setIsCommonExpensesModalOpen(false)}
+            />
+
+            <ConfirmModal
+                isOpen={!!clientToDelete}
+                onClose={() => setClientToDelete(null)}
+                onConfirm={handleDeleteClient}
+                title="Delete Project?"
+                message={clientToDelete ? `This permanently deletes "${clientToDelete.name}" and all its work entries, money received, and expenses. This cannot be undone.` : ""}
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
             />
 
             <EmployeeSummarySheet

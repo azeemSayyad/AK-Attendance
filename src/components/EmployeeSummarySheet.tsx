@@ -2,7 +2,7 @@
 
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, Calendar, Wallet, ArrowUpCircle, X } from "lucide-react";
+import { Trash2, Calendar, Wallet, ArrowUpCircle, X, IndianRupee, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { deleteEmployee } from "@/actions/employees";
 import ConfirmModal from "./ConfirmModal";
@@ -102,9 +102,9 @@ export default function EmployeeSummarySheet({ role, employee, attendanceData, t
                             initial={{ scale: 0.9, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             exit={{ scale: 0.9, opacity: 0 }}
-                            className="relative bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden p-6 sm:p-8"
+                            className="relative bg-white w-full max-w-sm rounded-[2.5rem] shadow-2xl overflow-hidden p-4 sm:p-5"
                         >
-                            <div className="flex justify-between items-center mb-6">
+                            <div className="flex justify-between items-center mb-4">
                                 <div className="flex flex-col">
                                     <h2 className="text-2xl font-black text-slate-900 leading-tight">{employee.name}</h2>
                                     <span className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-0.5">Summary</span>
@@ -118,41 +118,73 @@ export default function EmployeeSummarySheet({ role, employee, attendanceData, t
                             </div>
 
                             {role === "admin" && employee.pin && (
-                                <div className="mb-6 flex items-center justify-between px-4 py-2 bg-blue-50 border border-blue-100 rounded-2xl">
+                                <div className="mb-3 flex items-center justify-between px-4 py-2 bg-blue-50 border border-blue-100 rounded-2xl">
                                     <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Login PIN</span>
                                     <span className="text-xl font-black text-blue-600 tracking-[0.2em]">{employee.pin}</span>
                                 </div>
                             )}
 
-                            <div className="grid grid-cols-2 gap-3 mb-6">
-                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                                    <div className="flex items-center gap-2 mb-1 text-blue-600">
-                                        <Calendar size={14} />
-                                        <span className="text-[8px] uppercase font-bold tracking-wider">Attendance</span>
+                            <div className="grid grid-cols-2 gap-3 mb-4">
+                                <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-100 flex flex-col items-center text-center">
+                                    <div className="flex items-center gap-1.5 mb-1.5 text-indigo-600">
+                                        <IndianRupee size={13} />
+                                        <span className="text-[8px] uppercase font-bold tracking-wider">Per Day</span>
                                     </div>
-                                    <div className="text-base font-black text-slate-900">{daysPresent % 1 === 0 ? daysPresent : daysPresent.toFixed(1)} <span className="text-[10px] font-medium text-slate-400">days</span></div>
+                                    <div className="text-2xl font-black text-slate-900">₹{parseFloat(employee.dailyWage).toLocaleString()}</div>
                                 </div>
 
-                                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                                    <div className="flex items-center gap-2 mb-1 text-amber-600">
-                                        <ArrowUpCircle size={14} />
-                                        <span className="text-[8px] uppercase font-bold tracking-wider">Advances</span>
+                                <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-100 flex flex-col items-center text-center">
+                                    <div className="flex items-center gap-1.5 mb-1.5 text-blue-600">
+                                        <Calendar size={13} />
+                                        <span className="text-[8px] uppercase font-bold tracking-wider">Days Present</span>
                                     </div>
-                                    <div className="text-base font-black text-slate-900">₹{calculatedTotalAdvances.toLocaleString()}</div>
+                                    <div className="text-2xl font-black text-slate-900">{daysPresent % 1 === 0 ? daysPresent : daysPresent.toFixed(1)} <span className="text-[10px] font-medium text-slate-400">days</span></div>
+                                </div>
+
+                                <div className="bg-emerald-50 p-2.5 rounded-2xl border border-emerald-100 flex flex-col items-center text-center">
+                                    <div className="flex items-center gap-1.5 mb-1.5 text-emerald-600">
+                                        <TrendingUp size={13} />
+                                        <span className="text-[8px] uppercase font-bold tracking-wider">Total Income</span>
+                                    </div>
+                                    <div className="text-2xl font-black text-emerald-700">₹{grossEarnings.toLocaleString()}</div>
+                                </div>
+
+                                <div className="bg-amber-50 p-2.5 rounded-2xl border border-amber-100 flex flex-col items-center text-center">
+                                    <div className="flex items-center gap-1.5 mb-1.5 text-amber-600">
+                                        <ArrowUpCircle size={13} />
+                                        <span className="text-[8px] uppercase font-bold tracking-wider">Advances Taken</span>
+                                    </div>
+                                    <div className="text-2xl font-black text-amber-700">₹{calculatedTotalAdvances.toLocaleString()}</div>
+                                </div>
+                            </div>
+
+                            {/* Earnings breakdown ledger */}
+                            <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 mb-3 space-y-1.5">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-bold text-slate-500 tracking-wide">Income ({daysPresent % 1 === 0 ? daysPresent : daysPresent.toFixed(1)} × ₹{parseFloat(employee.dailyWage).toLocaleString()})</span>
+                                    <span className="text-xs font-black text-emerald-600">+₹{grossEarnings.toLocaleString()}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-[10px] font-bold text-slate-500 tracking-wide">Advances taken</span>
+                                    <span className="text-xs font-black text-amber-600">−₹{calculatedTotalAdvances.toLocaleString()}</span>
                                 </div>
                             </div>
 
                             <div className={cn(
-                                "rounded-[2rem] p-6 mb-6 shadow-xl transition-all duration-500",
+                                "rounded-[2rem] p-4 mb-4 shadow-xl transition-all duration-500",
                                 getPayoutColor(netSalary)
                             )}>
-                                <div className="flex justify-between items-center mb-3 opacity-80">
-                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Summary Payout</span>
+                                <div className="flex justify-between items-center mb-2 opacity-80">
+                                    <span className="text-[10px] font-bold uppercase tracking-[0.2em]">
+                                        {netSalary >= 0 ? "Balance To Pay" : "Balance To Return"}
+                                    </span>
                                     <Wallet size={18} />
                                 </div>
-                                <div className="text-3xl font-black mb-1">₹{netSalary.toLocaleString()}</div>
+                                <div className="text-3xl font-black mb-1">₹{Math.abs(netSalary).toLocaleString()}</div>
                                 <div className="text-[9px] font-bold bg-black/10 inline-block px-2.5 py-1 rounded-full backdrop-blur-sm">
-                                    Daily Wage: ₹{employee.dailyWage}
+                                    {netSalary >= 0
+                                        ? "Payable to staff"
+                                        : "Advances exceed earnings — staff returns this"}
                                 </div>
                             </div>
 

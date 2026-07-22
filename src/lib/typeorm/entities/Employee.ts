@@ -7,7 +7,12 @@ export class Employee {
     @PrimaryGeneratedColumn()
     id!: number;
 
-    @Column({ unique: true, length: 15 })
+    // Owning tenant. Nullable so existing rows migrate cleanly; backfilled by seed.
+    @Column({ name: "tenant_id", nullable: true })
+    tenantId?: number;
+
+    // Uniqueness enforced per-tenant in application code (see employees action).
+    @Column({ length: 15 })
     name!: string;
 
     @Column({ name: "daily_wage", type: "decimal", precision: 10, scale: 2 })

@@ -1,5 +1,5 @@
 import Dashboard from "@/components/Dashboard";
-import { getRole, getUserId } from "@/actions/auth";
+import { getRole, getUserId, getTenantName } from "@/actions/auth";
 import { redirect } from "next/navigation";
 
 export default async function Home() {
@@ -8,5 +8,9 @@ export default async function Home() {
   if (!role) {
     redirect("/login");
   }
-  return <Dashboard role={role} userId={userId} />;
+  if (role === "superadmin") {
+    redirect("/admin");
+  }
+  const tenantName = await getTenantName();
+  return <Dashboard role={role} userId={userId} tenantName={tenantName} />;
 }

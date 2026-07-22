@@ -145,19 +145,20 @@ export default function ClientDetailView({
 
             {/* Entries Section */}
             <div className="space-y-3">
-                <div className="flex justify-between items-center px-1">
+                {role === "admin" && (
+                    <button
+                        onClick={() => {
+                            setEditingEntry(null);
+                            setIsEntryModalOpen(true);
+                        }}
+                        className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-xl shadow-blue-500/20 hover:opacity-90 active:scale-[0.98] transition-all"
+                    >
+                        <Plus size={16} /> Add Entry
+                    </button>
+                )}
+
+                <div className="px-1">
                     <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Entry Logs</h3>
-                    {role === "admin" && (
-                        <button
-                            onClick={() => {
-                                setEditingEntry(null);
-                                setIsEntryModalOpen(true);
-                            }}
-                            className="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 hover:bg-blue-100 transition-colors shadow-sm"
-                        >
-                            <Plus size={14} /> Add Entry
-                        </button>
-                    )}
                 </div>
 
                 <div className="space-y-2">

@@ -6,6 +6,9 @@ export class ProjectExpense {
     @PrimaryGeneratedColumn()
     id!: number;
 
+    @Column({ name: "tenant_id", nullable: true })
+    tenantId?: number;
+
     @Column({ name: "client_id" })
     clientId!: number;
 

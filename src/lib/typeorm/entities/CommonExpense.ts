@@ -5,6 +5,9 @@ export class CommonExpense {
     @PrimaryGeneratedColumn()
     id!: number;
 
+    @Column({ name: "tenant_id", nullable: true })
+    tenantId?: number;
+
     @Column()
     name!: string;
 

@@ -6,6 +6,9 @@ export class Advance {
     @PrimaryGeneratedColumn()
     id!: number;
 
+    @Column({ name: "tenant_id", nullable: true })
+    tenantId?: number;
+
     @Column({ name: "employee_id" })
     employeeId!: number;
 
